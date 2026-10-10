@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StrobeGuard flash test page</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 14px/1.4 system-ui, sans-serif; }
+  #warning { max-width: 560px; margin: 40px auto; padding: 24px; border: 2px solid #e5a000; border-radius: 8px; background: #1c1c1c; }
+  #warning h1 { margin-top: 0; font-size: 20px; color: #ffb300; }
+  #warning button { display: block; width: 100%; margin-top: 10px; padding: 10px; font-size: 14px; cursor: pointer; }
+  #app { display: none; height: 100%; flex-direction: column; }
+  #bar { flex: none; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 4px; background: #222; }
+  #bar button { padding: 4px 8px; font-size: 12px; cursor: pointer; }
+  #bar button.active { outline: 2px solid #4fc3f7; }
+  #info { flex: none; padding: 2px 6px; font-size: 12px; color: #bbb; background: #222; border-top: 1px solid #333; }
+  /* The stage fills the rest of the (small) window so full-screen patterns cover well over 25% of a shared tab. */
+  #stage { flex: 1; position: relative; background: #808080; }
+  #box { position: absolute; left: 0; top: 0; width: 20%; height: 20%; display: none; }
+</style>
+</head>
+<body>
+<div id="warning">
+  <h1>⚠ Photosensitivity warning</h1>
+  <p>This page shows <strong>intentionally flashing patterns</strong>, including fast full-screen and red flashes, for testing StrobeGuard. They can trigger seizures in people with photosensitive epilepsy and can cause migraines or discomfort.</p>
+  <p>Do not continue if you are photosensitive. Keep the window small, keep the room lit, and look away from it while testing. Watch StrobeGuard's output and meters, not this page.</p>
+  <p>Patterns start only after you click one. The page opens on a steady gray screen.</p>
+  <button id="popup">I understand: open in a small popup window (recommended)</button>
+  <button id="here">I understand: continue in this window</button>
+</div>
+
+<div id="app">
+  <div id="bar">
+    <button data-p="steady">1 Steady</button>
+    <button data-p="flash5">2 5 Hz flash</button>
+    <button data-p="flash2">3 2 Hz flash</button>
+    <button data-p="single">4 Single flash / 3 s</button>
+    <button data-p="fade">5 Slow fade</button>
+    <button data-p="red5">6 5 Hz red</button>
+    <button data-p="corner5">7 5 Hz corner box</button>
+  </div>
+  <div id="info"></div>
+  <div id="stage"><div id="box"></div></div>
+</div>
+
+<script>
+  // Each pattern: color(tMs) returns the stage color (and box color for the corner test).
+  // Timing uses performance.now(), so rates are correct regardless of monitor refresh rate.
+  const GRAY = '#808080';
+  const square = (t, hz, on, off) => ((t * hz / 1000) % 1 < 0.5 ? on : off);
+  const PATTERNS = {
+    steady: { label: 'Steady gray', expect: '0 flashes/s, no damping', stage: () => GRAY },
+    flash5: { label: '5 Hz black/white, full stage', expect: '~5 flashes/s, DANGEROUS, damping everywhere',
+      stage: (t) => square(t, 5, '#ffffff', '#000000') },
+    flash2: { label: '2 Hz black/white, full stage', expect: '~2 flashes/s, should PASS (below 3)',
+      stage: (t) => square(t, 2, '#ffffff', '#000000') },
+    single: { label: 'Single 100 ms white flash every 3 s (camera flash)', expect: '≤1 flash/s, should PASS, no damping',
+      stage: (t) => (t % 3000 < 100 ? '#ffffff' : '#202020') },
+    fade: { label: 'Slow fade black ↔ white, 4 s period', expect: '≤0.5 flashes/s, should PASS, no damping',
+      stage: (t) => { const v = Math.round(255 * (0.5 - 0.5 * Math.cos(2 * Math.PI * t / 4000))); return `rgb(${v},${v},${v})`; } },
+    red5: { label: '5 Hz saturated red/black, full stage', expect: '~5 flashes/s, DANGEROUS, red risk > 0',
+      stage: (t) => square(t, 5, '#ff0000', '#000000') },
+    corner5: { label: '5 Hz black/white box, top-left 20% × 20% of stage', expect: 'overall < 3 flashes/s (small area); only corner cells may be damped',
+      stage: () => GRAY, box: (t) => square(t, 5, '#ffffff', '#000000') },
+  };
+
+  const stage = document.getElementById('stage');
+  const box = document.getElementById('box');
+  const info = document.getElementById('info');
+  let current = 'steady';
+
+  function select(name) {
+    current = name;
+    const p = PATTERNS[name];
+    box.style.display = p.box ? 'block' : 'none';
+    info.textContent = `${p.label} | expected: ${p.expect}`;
+    document.querySelectorAll('#bar button').forEach((b) => b.classList.toggle('active', b.dataset.p === name));
+  }
+
+  function frame() {
+    const t = performance.now();
+    const p = PATTERNS[current];
+    stage.style.background = p.stage(t);
+    if (p.box) box.style.background = p.box(t);
+    requestAnimationFrame(frame);
+  }
+
+  function start() {
+    document.getElementById('warning').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    select('steady');
+    requestAnimationFrame(frame);
+  }
+
+  document.querySelectorAll('#bar button').forEach((b) => b.addEventListener('click', () => select(b.dataset.p)));
+  // Keys 1-7 pick a pattern; Esc or 0 returns to steady.
+  const keys = Object.keys(PATTERNS);
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === '0') select('steady');
+    const i = Number(e.key) - 1;
+    if (i >= 0 && i < keys.length) select(keys[i]);
+  });
+
+  document.getElementById('here').addEventListener('click', start);
+  document.getElementById('popup').addEventListener('click', () => {
+    const w = window.open(location.pathname + '#go', 'strobeguard-flash', 'popup,width=640,height=420');
+    if (!w) start(); // popup blocked: fall back to this window
+  });
+  if (location.hash === '#go') start(); // already acknowledged in the opener
+</script>
+</body>
+</html>
