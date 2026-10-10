@@ -1,23 +1,30 @@
 // OWNER: Person A. Ring buffer of the last BUFFER_FRAMES video frames as WebGL2 textures.
-// The newest frame is analyzed by the detector; the OLDEST is displayed, which gives the
-// renderer a look-ahead of (BUFFER_FRAMES - 1) frames.
+// The newest frame is analyzed by the detector; the renderer displays the frame captured about
+// (BUFFER_FRAMES - 1) frame intervals ago (see indexForAge), so the newer ones are its look-ahead.
 //
 // Textures are allocated once per source resolution (texStorage2D) and reused; each new
 // frame is a texSubImage2D into the next slot. Nothing is allocated per frame.
 
 export type FrameRing = {
-  /** Upload a new frame into the next slot. Reallocates only if the video size changed. */
-  push(video: HTMLVideoElement): void;
+  /** Upload a new frame into the next slot, stamped with its capture time (ms). */
+  push(video: HTMLVideoElement, timeMs: number): void;
   /** Number of frames currently held (0..capacity). */
   readonly count: number;
   readonly capacity: number;
   readonly width: number;
   readonly height: number;
   /**
-   * Texture `k` frames newer than the oldest held frame (k = 0 is the oldest/displayed one).
+   * Texture `k` frames newer than the oldest held frame (k = 0 is the oldest).
    * k is clamped to the frames available, so early on this returns the newest frame instead.
    */
   textureFromOldest(k: number): WebGLTexture | null;
+  /**
+   * k (from oldest) of the held frame whose age at `nowMs` is closest to `targetAgeMs`.
+   * Selecting by age instead of always showing the oldest slot keeps the displayed sequence
+   * on the capture timeline: with uneven frame ticks, a fixed frame-count delay would replay
+   * frames faster or slower than they happened, which can make flashes look faster.
+   */
+  indexForAge(nowMs: number, targetAgeMs: number): number;
   dispose(): void;
 };
 
@@ -27,6 +34,7 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
   let height = 0;
   let writeIndex = 0; // slot the NEXT push writes into
   let count = 0;
+  const times = new Float64Array(capacity); // capture time of each slot
 
   function freeTextures() {
     textures.forEach((t) => gl.deleteTexture(t));
@@ -54,7 +62,7 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
   }
 
   return {
-    push(video) {
+    push(video, timeMs) {
       const w = video.videoWidth;
       const h = video.videoHeight;
       if (w === 0 || h === 0) return;
@@ -66,6 +74,7 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
       // No UNPACK_FLIP_Y: the video's top row lands at texture v = 0. The vertex shader maps
       // v = 0 to the top of the screen, so the image (and the mask) stay upright.
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, video);
+      times[writeIndex] = timeMs;
 
       writeIndex = (writeIndex + 1) % capacity;
       count = Math.min(count + 1, capacity);
@@ -85,6 +94,19 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
       const clamped = Math.max(0, Math.min(k, count - 1));
       const oldest = (writeIndex - count + capacity) % capacity;
       return textures[(oldest + clamped) % capacity] ?? null;
+    },
+    indexForAge(nowMs, targetAgeMs) {
+      const oldest = (writeIndex - count + capacity) % capacity;
+      let best = 0;
+      let bestErr = Infinity;
+      for (let k = 0; k < count; k++) {
+        const err = Math.abs(nowMs - (times[(oldest + k) % capacity] ?? 0) - targetAgeMs);
+        if (err < bestErr) {
+          bestErr = err;
+          best = k;
+        }
+      }
+      return best;
     },
     dispose() {
       freeTextures();
