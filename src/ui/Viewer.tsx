@@ -135,7 +135,7 @@ export function Viewer() {
           </figure>
         </section>
         <p className="readout">
-          {pipeline.measuredFps.toFixed(1)} source fps · Video buffer {pipeline.delayFrames} frames · Buffer delay {(pipeline.delayFrames / Math.max(1, pipeline.measuredFps) * 1000).toFixed(0)} ms
+          {pipeline.measuredFps.toFixed(1)} buffer fps · Video buffer {pipeline.delayFrames} frames · Buffer delay {(pipeline.delayFrames / Math.max(1, pipeline.measuredFps) * 1000).toFixed(0)} ms
           {!capture.hasAudio && ' · no audio shared'}
         </p>
         <section className="graphs" aria-label="Flash rate comparison">
