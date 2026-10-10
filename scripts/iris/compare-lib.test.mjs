@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVideo, estimateFps, ourGrades, parseIrisCsv, parseTimestamp, segments, verdict } from './compare-lib.mjs';
+import { compareVideo, estimateFps, joinCsvChunks, ourGrades, parseIrisCsv, parseIrisFrameJson, parseTimestamp, segments, verdict } from './compare-lib.mjs';
 
 const EXPECTED = `Frame,TimeStamp,AverageLuminance,FlashAreaLuminance,AverageLuminanceDiff,AverageLuminanceDiffAcc,AverageRed,FlashAreaRed,AverageRedDiff,AverageRedDiffAcc,PatternRisk,LuminanceTransitions,RedTransitions,LuminanceExtendedFailCount,RedExtendedFailCount,FlashLuminanceFailedFrame,FlashRedFailedFrame,PatternFailedFrame
 1,00:00.0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -52,4 +52,28 @@ test('compareVideo aligns IRIS frame n with our frame n-1 and scores agreement',
   assert.equal(r.irisVerdict, 'FAIL');
   assert.equal(r.ourVerdict, 'FAIL');
   assert.equal(r.patternFrames, 1);
+});
+
+test('parseIrisFrameJson reads LineGraphFrameData arrays', () => {
+  const f = parseIrisFrameJson({ LineGraphFrameData: {
+    LuminanceFrameResult: [0, 1, 3], RedFrameResult: [0, 0, 2], PatternFrameResult: [0, 0, 1],
+    LuminanceTransitions: [0, 4, 7], TimeStampString: ['00:00:00.000000', '00:00:00.040000', '00:00:00.080000'],
+  } });
+  assert.deepEqual(f.map((x) => [x.frame, x.lum, x.red, x.pattern, x.lumTransitions]), [[1, 0, 0, 0, 0], [2, 1, 0, 0, 4], [3, 3, 2, 1, 7]]);
+  assert.ok(Math.abs(estimateFps(f) - 25) < 1e-6);
+});
+
+test('joinCsvChunks stitches rotated IRIS CSVs and strips NUL padding', () => {
+  const [head, row1, row2] = APP.split('\n');
+  const joined = joinCsvChunks([`${head}\n${row1}\0\r\n`, `${row2}\0\r\n`]);
+  assert.deepEqual(parseIrisCsv(joined).map((f) => f.frame), [1, 2]);
+  assert.throws(() => joinCsvChunks([row2]), /no header/);
+});
+
+test('fillGaps carries grades over short playback drops only; joinSegments merges near segments', async () => {
+  const { fillGaps, joinSegments } = await import('./compare-lib.mjs');
+  const a = { lum: 3 };
+  assert.deepEqual(fillGaps([a, null, null, a]), [a, a, a, a]);
+  assert.deepEqual(fillGaps([a, null, null, null, null], 3), [a, a, a, a, null]);
+  assert.deepEqual(joinSegments([{ start: 0, end: 1 }, { start: 1.1, end: 2 }, { start: 3, end: 4 }]), [{ start: 0, end: 2 }, { start: 3, end: 4 }]);
 });
