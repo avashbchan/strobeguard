@@ -1,13 +1,28 @@
 // OWNER: Person A. GLSL ES 3.00 shaders.
 
 // One oversized triangle covers the whole viewport; no vertex buffer needed (uses gl_VertexID).
-// uv.y is flipped so v = 0 is the TOP of the screen: textures are uploaded top row first
-// (no UNPACK_FLIP_Y), and mask row 0 = top, so both stay upright.
+// Texture convention everywhere: v = 0 is the TOP of the image (frames are uploaded top row
+// first with no UNPACK_FLIP_Y, and mask row 0 = top).
+//
+// FULLSCREEN_VERT is for drawing to the CANVAS: the screen's top is clip y = +1, so uv.y is
+// flipped to keep v = 0 at the top of the screen.
 export const FULLSCREEN_VERT = `#version 300 es
 out vec2 vUv;
 void main() {
   vec2 pos = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
   vUv = vec2(pos.x * 0.5 + 0.5, 0.5 - pos.y * 0.5);
+  gl_Position = vec4(pos, 0.0, 1.0);
+}
+`;
+
+// TEXTURE_VERT is for drawing INTO a texture (framebuffer): there clip y = -1 writes texel
+// row 0 (v = 0), so uv must NOT be flipped. Otherwise the target is stored upside down and
+// later reads at the same uv fetch the vertically mirrored pixel.
+export const TEXTURE_VERT = `#version 300 es
+out vec2 vUv;
+void main() {
+  vec2 pos = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
+  vUv = pos * 0.5 + 0.5;
   gl_Position = vec4(pos, 0.0, 1.0);
 }
 `;

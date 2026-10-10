@@ -51,3 +51,13 @@ Milestone 2/4/5: WebGL setup and shaders (passthrough → damping → centered s
   | fixed 467 ms | **2.0 on 6/6** | **1–2** | **2.0** |
 - Real tab-capture E2E (`scripts/flash-e2e.mjs`, local build): 4/4 full runs pass (32/32 checks), at 18–21 fps.
 - **Audio must use the same constant**: `delayFrames / 30` s (467 ms), not `delayFrames / measuredFps`.
+
+## Robustness
+- **History orientation fix:** passes that render into a texture use `TEXTURE_VERT` (no Y flip). Before, the history
+  was stored upside down and damped pixels took brightness from the vertically mirrored spot (steady
+  top-white/bottom-black at m = 1 gave top/bottom luminance 0.356/0.381; now 0.604/0.033).
+- **Resolution cap:** see `src/buffer/README.md` (max 1920×1080 stored; output canvas follows).
+- **WebGL context loss:** all GPU objects live in `createGpu()`. On `webglcontextlost` the renderer drops them
+  (`preventDefault` so the browser restores the context) and `pushFrame`/`draw` become no-ops; on
+  `webglcontextrestored` it rebuilds them and resets history. Tested with `WEBGL_lose_context` in headed
+  (GPU) and headless Chrome: no throws while lost, correct damping and exact passthrough after restore.

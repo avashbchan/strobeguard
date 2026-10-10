@@ -4,6 +4,27 @@
 //
 // Textures are allocated once per source resolution (texStorage2D) and reused; each new
 // frame is a texSubImage2D into the next slot. Nothing is allocated per frame.
+//
+// Frames are stored at most MAX_WIDTH × MAX_HEIGHT. A larger source (big or 5K display) is
+// uploaded once into a mipmapped staging texture and drawn down into the slot with trilinear
+// filtering, instead of keeping 15 full-size copies (~1 GB of GPU memory at 5K).
+
+import { createProgram } from '../render/gl.ts';
+import { TEXTURE_VERT } from '../render/shaders.ts';
+
+export const MAX_WIDTH = 1920;
+export const MAX_HEIGHT = 1080;
+
+// Copy the staging frame into a slot. Both use v = 0 = top, and TEXTURE_VERT doesn't flip.
+const COPY_FRAG = `#version 300 es
+precision mediump float;
+in vec2 vUv;
+uniform sampler2D uSrc;
+out vec4 outColor;
+void main() {
+  outColor = texture(uSrc, vUv);
+}
+`;
 
 export type FrameRing = {
   /** Upload a new frame into the next slot, stamped with its capture time (ms). */
@@ -11,6 +32,7 @@ export type FrameRing = {
   /** Number of frames currently held (0..capacity). */
   readonly count: number;
   readonly capacity: number;
+  /** Stored (possibly downscaled) frame size. */
   readonly width: number;
   readonly height: number;
   /**
@@ -32,8 +54,14 @@ export type FrameRing = {
 
 export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): FrameRing {
   let textures: WebGLTexture[] = [];
-  let width = 0;
+  let width = 0; // stored size
   let height = 0;
+  let srcWidth = 0; // source size the buffer was allocated for
+  let srcHeight = 0;
+  let staging: WebGLTexture | null = null; // full-size upload target, only when downscaling
+  let copyProgram: WebGLProgram | null = null;
+  let copySrc: WebGLUniformLocation | null = null;
+  const fbo = gl.createFramebuffer();
   let writeIndex = 0; // slot the NEXT push writes into
   let count = 0;
   const times = new Float64Array(capacity); // capture time of each slot
@@ -41,10 +69,31 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
   function freeTextures() {
     textures.forEach((t) => gl.deleteTexture(t));
     textures = [];
+    if (staging) gl.deleteTexture(staging);
+    staging = null;
   }
 
-  function allocate(w: number, h: number) {
+  function allocate(sw: number, sh: number) {
     freeTextures();
+    const scale = Math.min(1, MAX_WIDTH / sw, MAX_HEIGHT / sh);
+    const w = Math.max(1, Math.round(sw * scale));
+    const h = Math.max(1, Math.round(sh * scale));
+    if (scale < 1) {
+      staging = gl.createTexture();
+      if (!staging) throw new Error('Could not create WebGL texture.');
+      gl.bindTexture(gl.TEXTURE_2D, staging);
+      const levels = Math.floor(Math.log2(Math.max(sw, sh))) + 1;
+      gl.texStorage2D(gl.TEXTURE_2D, levels, gl.RGBA8, sw, sh);
+      // Trilinear: averages source pixels when shrinking, so fine detail doesn't alias/shimmer.
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      if (!copyProgram) {
+        copyProgram = createProgram(gl, TEXTURE_VERT, COPY_FRAG);
+        copySrc = gl.getUniformLocation(copyProgram, 'uSrc');
+      }
+    }
     for (let i = 0; i < capacity; i++) {
       const tex = gl.createTexture();
       if (!tex) throw new Error('Could not create WebGL texture.');
@@ -58,6 +107,8 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
     }
     width = w;
     height = h;
+    srcWidth = sw;
+    srcHeight = sh;
     // Old frames were a different size; start the buffer over.
     writeIndex = 0;
     count = 0;
@@ -68,14 +119,29 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
       const w = video.videoWidth;
       const h = video.videoHeight;
       if (w === 0 || h === 0) return;
-      if (w !== width || h !== height) allocate(w, h);
+      if (w !== srcWidth || h !== srcHeight) allocate(w, h);
 
       const tex = textures[writeIndex];
       if (!tex) return;
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      // No UNPACK_FLIP_Y: the video's top row lands at texture v = 0. The vertex shader maps
+      // No UNPACK_FLIP_Y: the video's top row lands at texture v = 0. The canvas pass maps
       // v = 0 to the top of the screen, so the image (and the mask) stay upright.
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, video);
+      if (!staging) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, video);
+      } else {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, staging);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, video);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        gl.viewport(0, 0, width, height);
+        gl.useProgram(copyProgram);
+        gl.uniform1i(copySrc, 0);
+        gl.bindVertexArray(null);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
       times[writeIndex] = timeMs;
 
       writeIndex = (writeIndex + 1) % capacity;
@@ -118,8 +184,13 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
     },
     dispose() {
       freeTextures();
+      if (copyProgram) gl.deleteProgram(copyProgram);
+      copyProgram = null;
+      gl.deleteFramebuffer(fbo);
       width = 0;
       height = 0;
+      srcWidth = 0;
+      srcHeight = 0;
       count = 0;
     },
   };
