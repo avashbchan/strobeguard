@@ -17,9 +17,11 @@ export function areaRate(rates: ArrayLike<number>): number {
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
-/** Overall flash risk: 0 at ≤ 1 flash/s (isolated flashes), 1 above the 3/s threshold. */
+// Rates come in half-flash steps (transitions / 2), so the ramps below are written in those steps.
+
+/** Overall flash risk: 0 at ≤ 1 flash/s (isolated flashes), 1 once over the 3/s threshold (≥ 3.5). */
 export function flashRiskFromRate(rate: number): number {
-  return clamp01((rate - 1) / DANGER_RATE);
+  return clamp01((rate - 1) / 2.5);
 }
 
 /** Red flashes are higher risk: 0 at ≤ 1 red flash/s, 1 at ≥ 3. */
@@ -29,11 +31,12 @@ export function redRiskFromRate(rate: number): number {
 
 /**
  * Damping target for one cell, from its own rates (not the area rule), so only the cells
- * that actually flash get filtered. Luminance: 0 at ≤ 2 flashes/s, full at ≥ 3 (starting
- * below the threshold buys time to damp before the delayed frame is shown). Red: full at ≥ 2.
+ * that actually flash get filtered. Luminance: 0 at ≤ 2.5 flashes/s (5 transitions), full at
+ * ≥ 3 (6 transitions); starting just below the threshold buys time to damp before the delayed
+ * frame is shown. Red: 0 at ≤ 1.5, full at ≥ 2 red flashes/s.
  */
 export function cellTarget(flashRate: number, redRate: number): number {
-  return Math.max(clamp01(flashRate - 2), clamp01(redRate - 1));
+  return Math.max(clamp01((flashRate - 2.5) * 2), clamp01((redRate - 1.5) * 2));
 }
 
 /** Time constants for easing the mask (exponential approach to the target). */

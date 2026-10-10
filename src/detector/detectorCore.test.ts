@@ -71,6 +71,12 @@ test('5 Hz flash still detected at 15 fps (worker dropping frames)', () => {
   assert.ok(last.flashesPerSec > 3, `rate ${last.flashesPerSec}`);
 });
 
+test('3.5 Hz full-frame flash → dangerous (IRIS fails at 7 transitions/s)', () => {
+  const last = run((t) => square(t, 3.5, WHITE, BLACK), 3).at(-1)!;
+  assert.ok(last.flashesPerSec > 3, `rate ${last.flashesPerSec}`);
+  assert.equal(last.flashRisk, 1);
+});
+
 test('2 Hz flash → passes, no damping', () => {
   const rs = run((t) => square(t, 2, WHITE, BLACK), 4);
   assert.ok(maxOf(rs, (r) => r.flashesPerSec) <= 3);
