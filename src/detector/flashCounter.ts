@@ -3,6 +3,8 @@
 // A transition is a change of >= minDelta from the last turning point (the most recent
 // peak or trough), where the darker of the two states is < maxDarker. Transitions always
 // alternate direction, so two consecutive transitions = one flash (up+down or down+up).
+// Rates count half-flashes (transitions / 2), like EA IRIS: 7 transitions in a second = 3.5/s,
+// which already exceeds the WCAG 3/s limit (with whole flashes it would take 8).
 // Small noise never crosses minDelta, and a slow fade produces only one transition per
 // direction change, so fades and isolated flashes stay at low rates.
 
@@ -56,5 +58,5 @@ export function flashesInWindow(t: CellTracker, nowMs: number): number {
   let drop = 0;
   while (drop < t.times.length && (t.times[drop] ?? 0) <= cutoff) drop++;
   if (drop > 0) t.times.splice(0, drop);
-  return Math.floor(t.times.length / 2);
+  return t.times.length / 2;
 }

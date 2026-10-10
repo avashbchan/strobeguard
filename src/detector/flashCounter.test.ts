@@ -28,8 +28,20 @@ test('5 Hz square wave counts ~5 flashes/s', () => {
   assert.ok(r >= 4 && r <= 6, `got ${r}`);
 });
 
-test('2 Hz square wave stays at 2 flashes/s', () => {
-  assert.equal(maxRate(square(2, 1, 0), 3), 2);
+test('2 Hz square wave stays at 2–2.5 flashes/s (a 5th transition can sit on the window edge)', () => {
+  const r = maxRate(square(2, 1, 0), 3);
+  assert.ok(r >= 2 && r <= 2.5, `got ${r}`);
+});
+
+test('half-flashes count, like IRIS: 7 transitions in a second = 3.5/s (over the 3/s limit)', () => {
+  const tr = createTracker();
+  updateTracker(tr, 0, 0, LUMINANCE_RULE);
+  for (let i = 1; i <= 7; i++) updateTracker(tr, i % 2, i * 100, LUMINANCE_RULE);
+  assert.equal(flashesInWindow(tr, 700), 3.5);
+});
+
+test('3.5 Hz square wave exceeds 3 flashes/s', () => {
+  assert.ok(maxRate(square(3.5, 1, 0), 3) > 3);
 });
 
 test('transitions where the darker state is >= 0.8 are ignored', () => {

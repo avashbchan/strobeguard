@@ -35,6 +35,29 @@ export function parseIrisCsv(text) {
   });
 }
 
+/**
+ * IRIS's frameData.json (written when a video does not pass) has complete per-frame arrays in
+ * LineGraphFrameData. Same output shape as parseIrisCsv.
+ */
+export function parseIrisFrameJson(json) {
+  const d = json.LineGraphFrameData;
+  return d.LuminanceFrameResult.map((lum, i) => ({
+    frame: i + 1, t: parseTimestamp(d.TimeStampString[i]), lum, red: d.RedFrameResult[i] ?? 0,
+    pattern: d.PatternFrameResult[i] ?? 0, lumTransitions: d.LuminanceTransitions[i] ?? 0,
+  }));
+}
+
+/**
+ * For long videos IRIS rotates its CSV: framedata.N.csv (oldest) … framedata.1.csv, framedata.csv (newest).
+ * Only the oldest has the header, and lines can carry NUL padding. Pass texts oldest → newest.
+ */
+export function joinCsvChunks(texts) {
+  const lines = texts.flatMap((t) => t.replace(/\0/g, '').split(/\r?\n/)).filter((l) => l.trim());
+  const header = lines.find((l) => l.startsWith('Frame,'));
+  if (!header) throw new Error('IRIS CSV has no header (oldest chunk missing?)');
+  return [header, ...lines.filter((l) => !l.startsWith('Frame,'))].join('\n');
+}
+
 /** Frame rate from IRIS timestamps (app CSVs have microsecond precision). */
 export function estimateFps(frames) {
   const a = frames[0];
@@ -89,6 +112,30 @@ export function confusion(iris, ours, pred) {
 
 const firstIndex = (arr, pred) => arr.findIndex(pred);
 
+/** Real-time playback drops a few frames; carry the previous grade across gaps of up to maxGap frames. */
+export function fillGaps(grades, maxGap = 3) {
+  const out = grades.slice();
+  let last = null;
+  let gap = 0;
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]) { last = out[i]; gap = 0; continue; }
+    gap++;
+    if (last && gap <= maxGap) out[i] = last;
+  }
+  return out;
+}
+
+/** Joins segments separated by less than gapSec, for a readable list (levels are recomputed by the caller). */
+export function joinSegments(segs, gapSec = 0.25) {
+  const out = [];
+  for (const s of segs) {
+    const last = out[out.length - 1];
+    if (last && s.start - last.end < gapSec) last.end = s.end;
+    else out.push({ ...s });
+  }
+  return out;
+}
+
 /**
  * Compare one video. `irisFrames` from parseIrisCsv; `ourRows` from the offline runner
  * ([frame0, tMs, flashesPerSec, flashRisk, redRisk, maskMax]). IRIS frame n (1-based) ↔ our frame n-1.
@@ -103,6 +150,7 @@ export function compareVideo(irisFrames, ourRows, fps) {
     ours.push(r ? { ...ourGrades(r), pattern: 0, rate: r[2] } : null);
   }
   const covered = ours.filter(Boolean).length;
+  const filled = fillGaps(ours); // for segment lists only; frame scores use real frames
   const fail = (g) => g.lum === 3;
   const flagged = (g) => g.lum >= 2 || g.red >= 2;
   const any = (g) => g.lum >= 1 || g.red >= 1;
@@ -120,8 +168,8 @@ export function compareVideo(irisFrames, ourRows, fps) {
     patternFrames: iris.filter((g) => g.pattern >= 1).length,
     extendedFrames: iris.filter((g) => g.lum === 2).length,
     onsetDelaySec: irisFail >= 0 && ourFail >= 0 ? (ourFail - irisFail) / fps : null,
-    irisSegments: segments(iris, fps, any).map((s) => ({ ...s, level: maxLevel(iris, s, fps) })),
-    ourSegments: segments(ours.map((g) => g ?? { lum: 0, red: 0 }), fps, any).map((s) => ({ ...s, level: maxLevel(ours, s, fps) })),
+    irisSegments: joinSegments(segments(iris, fps, any)).map((s) => ({ ...s, level: maxLevel(iris, s, fps) })),
+    ourSegments: joinSegments(segments(filled.map((g) => g ?? { lum: 0, red: 0 }), fps, any)).map((s) => ({ ...s, level: maxLevel(filled, s, fps) })),
   };
 }
 
