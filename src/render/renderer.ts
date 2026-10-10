@@ -1,11 +1,16 @@
 // OWNER: Person A (render + buffer). Public API is frozen — see team/CONTRACTS.md.
-// Milestone 2: WebGL2 passthrough of the OLDEST frame in a 15-frame ring buffer.
-// The 14-frame delay is the detector's look-ahead. Damping (milestones 4–5) comes next.
+// Displays the OLDEST frame of a 15-frame ring buffer (14-frame look-ahead for the detector),
+// filtered per pixel by the 8×6 damping mask (milestone 4):
+//   pass 1: temporal low-pass of luminance into a history texture
+//   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
+// Where the mask is 0 (and settings are neutral) the output equals the source exactly.
 
-import { BUFFER_FRAMES, type FilterSettings } from '../types.ts';
+import { BUFFER_FRAMES, CELL_COUNT, GRID_COLS, GRID_ROWS, type FilterSettings } from '../types.ts';
 import { createFrameRing } from '../buffer/frameRing.ts';
 import { createProgram } from './gl.ts';
-import { FULLSCREEN_VERT, PASSTHROUGH_FRAG } from './shaders.ts';
+import { createLumaHistory } from './history.ts';
+import { readDebugMask } from './debugMask.ts';
+import { FILTER_FRAG, FULLSCREEN_VERT, HISTORY_FRAG } from './shaders.ts';
 
 export type Renderer = {
   /** Upload the newest video frame into the ring buffer. Call once per new source frame. */
@@ -17,47 +22,130 @@ export type Renderer = {
   dispose(): void;
 };
 
+/** maxProtection: every cell gets at least this much damping. */
+const MAX_PROTECTION_FLOOR = 0.8;
+
 export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   // preserveDrawingBuffer: the output detector reads this canvas back with drawImage.
-  const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, alpha: false });
-  if (!gl) throw new Error('WebGL2 is not available in this browser.');
+  const ctx = canvas.getContext('webgl2', { preserveDrawingBuffer: true, alpha: false });
+  if (!ctx) throw new Error('WebGL2 is not available in this browser.');
+  const gl: WebGL2RenderingContext = ctx;
 
   const ring = createFrameRing(gl, BUFFER_FRAMES);
-  const program = createProgram(gl, FULLSCREEN_VERT, PASSTHROUGH_FRAG);
-  const uFrame = gl.getUniformLocation(program, 'uFrame');
+  const history = createLumaHistory(gl);
+  let historyValid = false;
+
+  const historyProgram = createProgram(gl, FULLSCREEN_VERT, HISTORY_FRAG);
+  const filterProgram = createProgram(gl, FULLSCREEN_VERT, FILTER_FRAG);
+  const hu = uniforms(gl, historyProgram, ['uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid']);
+  const fu = uniforms(gl, filterProgram, [
+    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uBrightness', 'uSaturation',
+  ]);
   // An empty VAO: the fullscreen triangle is generated from gl_VertexID.
   const vao = gl.createVertexArray();
+
+  // 8×6 single-channel mask. Uploaded row 0 first, so row 0 sits at v = 0 = top of the screen.
+  // LINEAR filtering interpolates between cell centres, so damping fades across cell edges.
+  const maskTex = gl.createTexture();
+  const maskBytes = new Uint8Array(CELL_COUNT);
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, GRID_COLS, GRID_ROWS);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  const debugMask = readDebugMask();
+
+  function uploadMask(mask: readonly number[]) {
+    for (let i = 0; i < CELL_COUNT; i++) {
+      const v = mask[i] ?? 0;
+      maskBytes[i] = Number.isFinite(v) ? Math.round(Math.min(1, Math.max(0, v)) * 255) : 0;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, maskTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GRID_COLS, GRID_ROWS, gl.RED, gl.UNSIGNED_BYTE, maskBytes);
+  }
+
+  function bindTex(unit: number, tex: WebGLTexture | null) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+  }
 
   return {
     pushFrame(video) {
       ring.push(video);
+      if (ring.width === 0) return;
       // Match the drawing buffer to the source resolution.
-      if (ring.width > 0 && (canvas.width !== ring.width || canvas.height !== ring.height)) {
+      if (canvas.width !== ring.width || canvas.height !== ring.height) {
         canvas.width = ring.width;
         canvas.height = ring.height;
       }
+      if (history.resize(ring.width, ring.height)) historyValid = false;
     },
-    draw() {
+
+    draw(mask, settings) {
       gl.viewport(0, 0, canvas.width, canvas.height);
       // Displayed frame = oldest held frame (until the buffer fills, the oldest available).
       const frame = ring.textureFromOldest(0);
       if (!frame) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         return;
       }
-      gl.useProgram(program);
+      uploadMask(debugMask ?? mask);
+      const minMask = settings.maxProtection ? MAX_PROTECTION_FLOOR : 0;
       gl.bindVertexArray(vao);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, frame);
-      gl.uniform1i(uFrame, 0);
+      bindTex(0, frame);
+      bindTex(1, maskTex);
+
+      // Pass 1: low-passed luminance → history[write].
+      gl.bindFramebuffer(gl.FRAMEBUFFER, history.writeFbo);
+      gl.useProgram(historyProgram);
+      bindTex(2, history.read);
+      gl.uniform1i(hu.uFrame, 0);
+      gl.uniform1i(hu.uMask, 1);
+      gl.uniform1i(hu.uHistory, 2);
+      gl.uniform1f(hu.uMinMask, minMask);
+      gl.uniform1f(hu.uHistoryValid, historyValid ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      // Pass 2: filtered frame → canvas.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.useProgram(filterProgram);
+      bindTex(2, history.written);
+      gl.uniform1i(fu.uFrame, 0);
+      gl.uniform1i(fu.uMask, 1);
+      gl.uniform1i(fu.uHistory, 2);
+      gl.uniform1f(fu.uMinMask, minMask);
+      gl.uniform1f(fu.uBrightness, settings.brightness);
+      gl.uniform1f(fu.uSaturation, settings.saturation);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      history.swap();
+      historyValid = true;
     },
+
     delayFrames: BUFFER_FRAMES - 1,
+
     dispose() {
       ring.dispose();
-      gl.deleteProgram(program);
+      history.dispose();
+      gl.deleteTexture(maskTex);
+      gl.deleteProgram(historyProgram);
+      gl.deleteProgram(filterProgram);
       gl.deleteVertexArray(vao);
     },
   };
+}
+
+function uniforms<K extends string>(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  names: readonly K[],
+): Record<K, WebGLUniformLocation | null> {
+  const out = {} as Record<K, WebGLUniformLocation | null>;
+  for (const n of names) out[n] = gl.getUniformLocation(program, n);
+  return out;
 }
