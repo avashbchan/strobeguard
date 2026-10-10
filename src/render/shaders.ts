@@ -49,17 +49,20 @@ float maskAt(vec2 uv) {
 }
 `;
 
-// Pass 1 → history texture. Centered temporal low-pass on linear luminance (milestones 4–5):
+// Pass 1 → history texture. Centered temporal low-pass of the pixel's COLOUR (milestones 4–5):
 //   future side: weighted average of the displayed frame and the next 4 buffered (newer) frames,
 //                weights 5,4,3,2,1 — a flash starts pulling the average before it is on screen;
 //   past side:   recursive (IIR) blend with the previous output, hist_prev.
-//   Lc   = mix(L_0, futureAvg, m)
-//   hist = mix(Lc, hist_prev, k * m)
-// With m = 0 this is exactly L_0; with m = 1 a 5 Hz on/off flash collapses to a small ripple.
-// The history holds the luminance actually shown, so the filter's own output is what gets smoothed.
+//   Cc   = mix(C_0, futureAvg, m)
+//   hist = mix(Cc, hist_prev, k * m)
+// Averaged in cube-root space (the lightness scale of OKLab), not linear light or sRGB: a rare
+// flash barely moves the average, so a dark scene stays dark instead of turning into a grey veil,
+// while an even black/white flash settles at the perceived middle.
+// Keeping colour (not just luminance) lets pass 2 fill dark frames with the pixel's own average
+// colour instead of grey. With m = 0 this is exactly C_0.
 export const HISTORY_FRAG = `#version 300 es
 ${COMMON}
-uniform sampler2D uHistory;  // previous low-passed luminance (r channel)
+uniform sampler2D uHistory;  // previous low-passed colour (rgb, cube-root of linear)
 uniform float uHistoryValid; // 0 on the first frame / after a resize
 uniform sampler2D uFuture1;  // buffered frames 1..4 newer than the displayed one
 uniform sampler2D uFuture2;
@@ -67,34 +70,37 @@ uniform sampler2D uFuture3;
 uniform sampler2D uFuture4;
 out vec4 outColor;
 
-const float K_TEMPORAL = 0.9;
+const float K_TEMPORAL = 0.82;
 
-float lumaOf(sampler2D tex) {
-  return luminance(toLinear(texture(tex, vUv).rgb));
+vec3 colourOf(sampler2D tex) {
+  return pow(toLinear(texture(tex, vUv).rgb), vec3(1.0 / 3.0));
 }
 
 void main() {
   float m = maskAt(vUv);
-  float l0 = lumaOf(uFrame);
-  float futureAvg = (5.0 * l0 + 4.0 * lumaOf(uFuture1) + 3.0 * lumaOf(uFuture2)
-                   + 2.0 * lumaOf(uFuture3) + 1.0 * lumaOf(uFuture4)) / 15.0;
-  float lc = mix(l0, futureAvg, m);
-  float lPrev = texture(uHistory, vUv).r;
+  vec3 c0 = colourOf(uFrame);
+  vec3 futureAvg = (5.0 * c0 + 4.0 * colourOf(uFuture1) + 3.0 * colourOf(uFuture2)
+                  + 2.0 * colourOf(uFuture3) + 1.0 * colourOf(uFuture4)) / 15.0;
+  vec3 cc = mix(c0, futureAvg, m);
+  vec3 cPrev = texture(uHistory, vUv).rgb;
   float a = K_TEMPORAL * m * uHistoryValid;
-  outColor = vec4(mix(lc, lPrev, a), 0.0, 0.0, 1.0);
+  outColor = vec4(mix(cc, cPrev, a), 1.0);
 }
 `;
 
-// Pass 2 → canvas. Uses the low-passed luminance from pass 1, then reduces contrast and red.
+// Pass 2 → canvas. Brings each damped pixel to the smoothed brightness while keeping its colour,
+// and steadies colour flicker (incl. red) toward the pixel's smoothed colour.
 export const FILTER_FRAG = `#version 300 es
 ${COMMON}
-uniform sampler2D uHistory;  // low-passed luminance for THIS frame (written by pass 1)
+uniform sampler2D uHistory;  // low-passed colour for THIS frame, cube-root of linear (pass 1)
 uniform float uBrightness;   // multiplier, 1 = unchanged
 uniform float uSaturation;   // multiplier, 1 = unchanged
 out vec4 outColor;
 
-const float CONTRAST_CUT = 0.4; // at m = 1, pull 40% of the way to mid-grey
+const float CONTRAST_CUT = 0.0; // at m = 1, pull 40% of the way to mid-grey
 const float RED_RATIO = 0.8;    // saturated red: R/(R+G+B) >= 0.8 (same as detector)
+const float GAIN_MAX = 8.0;     // most a dark pixel is brightened by scaling (limits noise)
+const float CHROMA_SMOOTH = 0.0; // how far a damped pixel's colour eases toward its smoothed colour
 
 void main() {
   vec3 src = texture(uFrame, vUv).rgb;
@@ -102,21 +108,27 @@ void main() {
   vec3 rgb = src; // m = 0 → exactly the source texel
 
   if (m > 0.0) {
-    // Temporal low-pass, luminance only: add the same linear offset to R, G and B so the
-    // pixel's luminance becomes the smoothed value while its colour differences and edges
-    // stay from the current frame (blending whole frames would ghost moving detail).
+    // Temporal low-pass without grey: scale the current pixel to the smoothed luminance (keeps its
+    // hue, saturation and edges). Whatever a capped gain can't reach (near-black frames between
+    // flashes) is filled with the pixel's own smoothed colour, not neutral grey.
     vec3 lin = toLinear(src);
-    float target = texture(uHistory, vUv).r;
-    lin = clamp(lin + (target - luminance(lin)), 0.0, 1.0);
-    rgb = toSrgb(lin);
+    vec3 h = texture(uHistory, vUv).rgb;
+    vec3 avg = h * h * h; // back to linear
+    float y = luminance(lin);
+    float target = luminance(avg);
+    float gain = min(target / max(y, 1e-5), GAIN_MAX);
+    vec3 scaled = lin * gain;
+    float missing = max(target - y * gain, 0.0);
+    lin = clamp(scaled + avg * (missing / max(target, 1e-5)), 0.0, 1.0);
 
-    // Saturated-red desaturation. Ramp in just below the threshold so there is no hard edge,
-    // and ignore near-black pixels where the ratio is noise.
-    float sum = rgb.r + rgb.g + rgb.b;
-    float redness = rgb.r / max(sum, 1e-4);
-    float redW = smoothstep(RED_RATIO - 0.1, RED_RATIO, redness) * smoothstep(0.05, 0.2, sum);
-    float grey = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    rgb = mix(rgb, vec3(grey), redW * m);
+    // Colour can flash too (e.g. red ↔ blue at the same brightness). Ease the colour toward the
+    // pixel's smoothed colour (same luminance, so brightness stays steady): partly everywhere
+    // damped, fully where saturated red is involved, so red goes steady instead of grey.
+    float redCur = smoothstep(RED_RATIO - 0.1, RED_RATIO, lin.r / max(lin.r + lin.g + lin.b, 1e-4));
+    float redAvg = smoothstep(RED_RATIO - 0.1, RED_RATIO, avg.r / max(avg.r + avg.g + avg.b, 1e-4));
+    float settle = m * mix(CHROMA_SMOOTH, 1.0, max(redCur, redAvg));
+    lin = mix(lin, avg, settle);
+    rgb = toSrgb(lin);
 
     // Contrast reduction toward mid-grey (perceptual space), proportional to risk.
     rgb = mix(rgb, vec3(0.5), CONTRAST_CUT * m);

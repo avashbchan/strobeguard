@@ -1,4 +1,4 @@
-// OWNER: Person A. Ping-pong pair of single-channel textures holding the low-passed luminance
+// OWNER: Person A. Ping-pong pair of RGBA textures holding the low-passed colour (sRGB-encoded)
 // of the displayed frame (see HISTORY_FRAG). Each frame reads one and renders into the other.
 
 export type LumaHistory = {
@@ -16,9 +16,9 @@ export type LumaHistory = {
 
 export function createLumaHistory(gl: WebGL2RenderingContext): LumaHistory {
   // Half-float keeps the slow low-pass from stalling on 8-bit rounding. Needs this extension to
-  // be renderable; Chrome desktop has it. Fall back to R8 if not.
+  // be renderable; Chrome desktop has it. Fall back to RGBA8 if not.
   const hasFloat = gl.getExtension('EXT_color_buffer_float') !== null;
-  const internalFormat = hasFloat ? gl.R16F : gl.R8;
+  const internalFormat = hasFloat ? gl.RGBA16F : gl.RGBA8;
 
   let textures: WebGLTexture[] = [];
   let fbos: WebGLFramebuffer[] = [];
