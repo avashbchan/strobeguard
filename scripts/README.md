@@ -44,3 +44,4 @@ Our results are cached per video and detector version, and the report is rewritt
 so an interrupted run resumes. Reports land in `<tmp>/strobeguard-iris/report/`. Long clips take about as
 long as their duration (real-time playback). Needs Windows for the IRIS app; the 8 test videos can fall back
 to IRIS's published expected CSVs elsewhere.
+| Session timeline | `flash5`, `red5` add a **high risk** segment; `flash2` (2 Hz for > 4 s) adds a **sustained caution** segment; calm patterns add nothing new (after a 1.5 s tail from the previous pattern). Skipped on builds without the timeline. |

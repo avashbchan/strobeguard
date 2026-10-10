@@ -42,14 +42,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // expect: 'danger' = input must exceed 3/s and output must stay under 3/s
 //         'safe'   = input should stay under 3/s; output must not flash more than input
+// timeline: what the session timeline must show for the pattern ('none' = nothing new flagged)
 const ALL_PATTERNS = [
-  { key: 'steady', expect: 'safe' },
-  { key: 'flash5', expect: 'danger' },
-  { key: 'flash2', expect: 'safe' },
-  { key: 'single', expect: 'safe' },
-  { key: 'fade', expect: 'safe' },
-  { key: 'red5', expect: 'danger', red: true },
-  { key: 'corner5', expect: 'safe' },
+  { key: 'steady', expect: 'safe', timeline: 'none' },
+  { key: 'flash5', expect: 'danger', timeline: 'fail' },
+  { key: 'flash2', expect: 'safe', timeline: 'extended' }, // 2 Hz for > 4 s = IRIS extended failure
+  { key: 'single', expect: 'safe', timeline: 'none' },
+  { key: 'fade', expect: 'safe', timeline: 'none' },
+  { key: 'red5', expect: 'danger', red: true, timeline: 'fail' },
+  { key: 'corner5', expect: 'safe', timeline: 'none' },
 ];
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
 const PATTERNS = ONLY ? ALL_PATTERNS.filter((p) => ONLY.includes(p.key)) : ALL_PATTERNS;
@@ -144,6 +145,11 @@ const TRACE_SCRIPT = `
     get onmessage() { return super.onmessage; }
   };`;
 
+// Session timeline: segments with data-level/start/end (ms) and the bar's current time.
+const TIMELINE = `[...document.querySelectorAll('.timeline-seg')].map((e) => ({ level: e.dataset.level, start: +e.dataset.start, end: +e.dataset.end }))`;
+const TIMELINE_NOW = `Number(document.querySelector('.timeline-bar')?.dataset.now ?? NaN)`;
+const TAIL_MS = 1500; // the previous pattern can stay flagged this long (1 s detector window + bridging)
+
 let exitCode = 0;
 try {
   const appTarget = await waitFor(async () => (await listTargets()).find((x) => x.type === 'page' && x.url.startsWith(APP)));
@@ -199,6 +205,7 @@ try {
   console.log(`Pipeline: ${await app.ev(`[...document.querySelectorAll('.stats > *')].map((e) => e.textContent).join(' · ')`)}\n`);
 
   for (const p of PATTERNS) {
+    const t0 = await app.ev(TIMELINE_NOW);
     await flash.ev(`document.querySelector('[data-p="${p.key}"]').click()`);
     await sleep(WARMUP_MS);
     const samples = [];
@@ -233,6 +240,15 @@ try {
       problems.push(`input reached ${r.inMax.toFixed(1)}/s on a pattern that should be safe`);
     }
     if (r.outMax > r.inMax + 0.5) problems.push('output flashes more than input');
+    if (Number.isFinite(t0)) { // older builds have no timeline
+      const segs = await app.ev(TIMELINE);
+      if (p.timeline === 'none') {
+        const extra = segs.find((s) => s.start > t0 + TAIL_MS);
+        if (extra) problems.push(`timeline flagged ${extra.level} on a calm pattern`);
+      } else if (!segs.some((s) => s.level === p.timeline && s.end > t0 + TAIL_MS)) {
+        problems.push(`timeline shows no ${p.timeline} segment`);
+      }
+    }
     results.push(problems.length === 0);
     console.log(
       `${problems.length ? 'FAIL' : 'PASS'}  ${p.key.padEnd(8)}  in max ${r.inMax.toFixed(1)} (mean ${r.inMean.toFixed(1)})` +
@@ -241,6 +257,8 @@ try {
     );
   }
   await flash.ev(`document.querySelector('[data-p="steady"]').click()`);
+  const finalSegs = await app.ev(TIMELINE);
+  if (finalSegs.length) console.log('\nTimeline: ' + finalSegs.map((x) => `${(x.start / 1000).toFixed(1)}–${(x.end / 1000).toFixed(1)} s ${x.level}`).join(', '));
 
   const failed = results.filter((x) => !x).length;
   console.log(`\n${results.length - failed}/${results.length} checks passed.`);
