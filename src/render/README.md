@@ -36,10 +36,18 @@ Milestone 2/4/5: WebGL setup and shaders (passthrough → damping → centered s
 - `history.ts` — ping-pong low-passed luminance textures.
 - `debugMask.ts` — dev-only `?debugMask=` override.
 
-## Display timing (fix after integration)
-- The displayed frame is chosen by **capture time**, not slot position: the frame whose age is closest to
-  `(BUFFER_FRAMES − 1) × average frame interval` (`frameRing.indexForAge`). The average interval is a slow EMA of
-  push gaps (stalls > 250 ms ignored), so the delay matches the UI's audio delay `delayFrames / measuredFps`.
-- Why: with uneven frame ticks, always showing the oldest slot replays frames faster than they were captured.
-  In the end-to-end test a 2 Hz flash (safe) came out at 3–4 flashes/s. Offline with random tick gaps and the
-  mask at 0: old 2 Hz → 3.0 out, time-based → 2.0 out. Real tab-capture E2E after the fix: 7/7 patterns pass (twice).
+## Display timing (fixes after integration)
+- The displayed frame is chosen by **capture time**: the frame whose age is closest to a **fixed 467 ms**
+  (`delayFrames` at a nominal 30 fps), via `frameRing.indexForAge`. Playback never steps back to an older frame.
+- Why fixed: always showing the oldest slot (a frame-count delay) replays frames faster than they were captured
+  when ticks are uneven: a safe 2 Hz flash measured 3–4 flashes/s at the output. An adaptive delay (tracking the
+  measured frame interval) fixed most of that, but a frame-loop stall then moved the delay ~66–108 ms at once, so
+  playback jumped back over a white↔black edge and inserted a flash (seen in a traced production run).
+- Offline, stall-heavy timing (6% of ticks stall 120–190 ms), 6 seeds, output max flashes/s:
+
+  | | 2 Hz (safe) | 5 Hz (danger) | 5 Hz → 2 Hz |
+  |---|---|---|---|
+  | adaptive delay (#8) | 3.0 on 4/6 seeds | 0–2 | up to 3.0 |
+  | fixed 467 ms | **2.0 on 6/6** | **1–2** | **2.0** |
+- Real tab-capture E2E (`scripts/flash-e2e.mjs`, local build): 4/4 full runs pass (32/32 checks), at 18–21 fps.
+- **Audio must use the same constant**: `delayFrames / 30` s (467 ms), not `delayFrames / measuredFps`.
