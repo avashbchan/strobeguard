@@ -3,24 +3,9 @@ import { startCapture, type Capture } from '../capture/capture';
 import { createAudioChain, prepareAudioContext, releasePreparedAudioContext, type AudioChain } from '../audio/audio';
 import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from '../types';
 import { Disclaimer } from './Disclaimer';
-import { Logo } from './Logo';
 import { usePipeline } from './usePipeline';
-import { RatesPanel, RegionMap, RiskPanel, effectiveMask, useFullscreen } from './Panels';
-
-// Drives the filled part of the styled range track (see input[type=range] in styles.css).
-const fill = (value: number, min: number, max: number) =>
-  ({ '--fill': ((value - min) / (max - min)) * 100 + '%' }) as CSSProperties;
-
-type Status = { label: string; tone: 'idle' | 'neutral' | 'active' };
-
-const FILTERING = 0.05; // any cell damped above this → "Filtering flashes"
-
-function statusOf(capture: Capture | null, starting: boolean, maxProtection: boolean, mask: readonly number[] | undefined): Status {
-  if (!capture) return starting ? { label: 'Starting', tone: 'neutral' } : { label: 'Not sharing', tone: 'idle' };
-  if (maxProtection) return { label: 'Maximum protection', tone: 'active' };
-  if (mask?.some((m) => m > FILTERING)) return { label: 'Filtering flashes', tone: 'active' };
-  return { label: 'Watching for flashes', tone: 'neutral' };
-}
+import { DampingMap, FlashChart, RiskMeters } from './FlashGraph';
+import { Mark } from './Mark';
 
 export function Viewer() {
   const [capture, setCapture] = useState<Capture | null>(null);
@@ -37,9 +22,15 @@ export function Viewer() {
   const thumbRef = useRef<HTMLCanvasElement>(null);
   const outputRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
-  const fullscreen = useFullscreen(stageRef);
-  const toggleFullscreen = fullscreen.toggle;
+  const [fullscreen, setFullscreen] = useState(false);
   const pipeline = usePipeline(capture, outputRef, settings);
+  const pipelineRef = useRef(pipeline);
+  pipelineRef.current = pipeline;
+  // Session counter: once a second, add how many flashes the filter removed in that second
+  // (original area rate minus filtered area rate). Kept for the whole page session.
+  const [session, setSession] = useState({ softened: 0, filteringSeconds: 0 });
+  const [thumbRevealed, setThumbRevealed] = useState(false);
+  const [thumbCollapsed, setThumbCollapsed] = useState(false);
   // Match the renderer's fixed capture-time delay, independent of GPU throughput.
   const DELAY_SECONDS = pipeline.delayFrames / 30;
 
@@ -137,126 +128,191 @@ export function Viewer() {
     releasePreparedAudioContext();
   }, []);
 
-  // F toggles fullscreen while sharing (ignored while typing or adjusting a control).
+  useEffect(() => {
+    if (!capture) return;
+    const id = window.setInterval(() => {
+      const { input, output } = pipelineRef.current;
+      if (!input) return;
+      const removed = Math.max(0, input.flashesPerSec - (output?.flashesPerSec ?? input.flashesPerSec));
+      const filtering = input.cellMask.some((m) => m >= 0.5);
+      if (removed > 0 || filtering) {
+        setSession((s) => ({ softened: s.softened + removed, filteringSeconds: s.filteringSeconds + (filtering ? 1 : 0) }));
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [capture]);
+
+  // Fullscreen shows only the stage: filtered output plus the small original preview.
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void stageRef.current?.requestFullscreen();
+  }
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
   useEffect(() => {
     if (!capture) return;
     const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
       if (e.key.toLowerCase() !== 'f' || e.metaKey || e.ctrlKey || e.altKey) return;
-      if ((e.target as HTMLElement | null)?.closest('input, select, textarea')) return;
-      e.preventDefault();
+      if (el && (el.tagName === 'INPUT' || el.isContentEditable)) return;
       toggleFullscreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [capture, toggleFullscreen]);
-
-  // Leave fullscreen when sharing stops, so the empty stage isn't left filling the screen.
-  useEffect(() => {
-    if (!capture && document.fullscreenElement) void document.exitFullscreen();
   }, [capture]);
 
-  const status = statusOf(capture, starting, settings.maxProtection, pipeline.input?.cellMask);
-  const mask = effectiveMask(pipeline.input, settings.maxProtection);
-  const audioOn = !!capture && !!audioRef.current;
-  const audioState = !capture ? '–' : audioOn ? 'In sync' : capture.hasAudio ? 'Unavailable' : 'Not shared';
-  const shareButton = (
-    <button className="primary" onClick={handleStart} disabled={starting}>{starting ? 'Waiting for tab…' : 'Share a tab'}</button>
-  );
+  const filteredRegions = pipeline.input?.cellMask.filter((m) => m >= 0.5).length ?? 0;
+  const status = !capture
+    ? { tone: 'idle', text: 'Not sharing' }
+    : !pipeline.input
+      ? { tone: 'idle', text: 'Starting' }
+      : filteredRegions > 0 || settings.maxProtection
+        ? { tone: 'active', text: settings.maxProtection ? 'Maximum protection' : 'Filtering flashes' }
+        : { tone: 'watch', text: 'Watching for flashes' };
 
   return (
-    <div className="viewer">
+    <div className="app">
       <header className="topbar">
-        <div className="brand"><Logo /> StrobeGuard</div>
-        <p className={'status ' + status.tone} role="status"><i aria-hidden="true" />{status.label}</p>
-        <div className="topbar-action">
-          {capture ? <button className="secondary" onClick={stopCapture}>Stop sharing</button> : shareButton}
+        <div className="brand"><Mark /> StrobeGuard</div>
+        <div className={`status status-${status.tone}`} role="status"><span className="status-dot" />{status.text}</div>
+        <div className="topbar-actions">
+          {capture
+            ? <button onClick={stopCapture}>Stop sharing</button>
+            : <button className="primary" onClick={handleStart} disabled={starting}>{starting ? 'Waiting for tab…' : 'Share a tab'}</button>}
         </div>
       </header>
 
-      <div className="workspace">
-        <main className="main">
-          {error && <p className="error" role="alert">{error}</p>}
-          {audioNotice && <p className="notice" role="status">{audioNotice}</p>}
-          <section ref={stageRef} className={'stage' + (capture ? ' live' : '')} aria-label="Filtered stream">
-            {capture ? <>
-              <canvas ref={outputRef} className="output" aria-label="Filtered stream output" />
-              <button
-                className="icon fullscreen-toggle"
-                onClick={fullscreen.toggle}
-                aria-label={fullscreen.on ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-                title={fullscreen.on ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                  {fullscreen.on
-                    ? <path d="M6 1.5V6H1.5M10 1.5V6h4.5M6 14.5V10H1.5M10 14.5V10h4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                    : <path d="M1.5 6V1.5H6M14.5 6V1.5H10M1.5 10v4.5H6M14.5 10v4.5H10" fill="none" stroke="currentColor" strokeWidth="1.5" />}
-                </svg>
-                <kbd>F</kbd>
-              </button>
-              {/* The unfiltered stream only ever appears at this small size (safety rule). */}
-              <figure className="thumb">
-                <canvas ref={thumbRef} width={176} height={99} aria-label="Small unfiltered source preview" />
-                <figcaption><i className="swatch amber" />Original</figcaption>
-              </figure>
-              <p className="fs-disclaimer">Reduces flash risk; not a medical device.</p>
-            </> : (
-              <div className="empty">
-                <Logo size={36} />
-                <h2>Share the tab playing your stream</h2>
-                <p>Pick the tab in Chrome’s share dialog and turn on “Share tab audio” to keep sound in sync.</p>
-                {shareButton}
+      <main className="main">
+        {error && <p className="banner banner-error" role="alert">{error}</p>}
+        {audioNotice && <p className="banner" role="status">{audioNotice}</p>}
+
+        <section ref={stageRef} className={`stage ${capture ? 'is-live' : ''}`} aria-label="Filtered stream"
+          onDoubleClick={capture ? toggleFullscreen : undefined}>
+          {capture ? <>
+            <canvas ref={outputRef} className="output" aria-label="Filtered stream output" />
+            <button className="stage-button" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title={fullscreen ? 'Exit full screen (F)' : 'Full screen (F)'}>
+              {fullscreen
+                ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" /></svg>
+                : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" /></svg>}
+            </button>
+            <figure className={`thumb${thumbCollapsed ? ' is-collapsed' : ''}${thumbRevealed ? ' is-revealed' : ''}`}>
+              <figcaption className="thumb-head">
+                <span className="thumb-label">Original</span>
+                {!thumbCollapsed && (
+                  <button className="thumb-icon" onClick={() => setThumbRevealed((v) => !v)} aria-pressed={thumbRevealed}
+                    aria-label={thumbRevealed ? 'Blur the original preview' : 'Unblur the original preview'} title={thumbRevealed ? 'Blur' : 'Unblur'}>
+                    {thumbRevealed
+                      ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" /><circle cx="10" cy="10" r="2.5" /><path d="M3 3l14 14" /></svg>
+                      : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" /><circle cx="10" cy="10" r="2.5" /></svg>}
+                  </button>
+                )}
+                <button className="thumb-icon" onClick={() => setThumbCollapsed((v) => !v)} aria-expanded={!thumbCollapsed}
+                  aria-label={thumbCollapsed ? 'Show the original preview' : 'Collapse the original preview'} title={thumbCollapsed ? 'Expand' : 'Collapse'}>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">{thumbCollapsed ? <path d="M6 12l4-4 4 4" /> : <path d="M6 8l4 4 4-4" />}</svg>
+                </button>
+              </figcaption>
+              <div className="thumb-body">
+                <canvas ref={thumbRef} width={256} height={144} aria-label="Small preview of the original, unfiltered stream" />
+                {!thumbRevealed && (
+                  <button className="thumb-reveal" onClick={() => setThumbRevealed(true)}>Unblur original</button>
+                )}
               </div>
-            )}
-          </section>
-          <div className="below">
-            <Disclaimer />
-            <dl className="readout">
-              <div><dt>Frame rate</dt><dd>{capture ? Math.round(pipeline.measuredFps) + ' fps' : '–'}</dd></div>
-              <div><dt>Delay</dt><dd>{capture ? (DELAY_SECONDS * 1000).toFixed(0) + ' ms' : '–'}</dd></div>
-              <div><dt>Audio</dt><dd>{audioState}</dd></div>
+            </figure>
+          </> : (
+            <div className="empty">
+              <Mark size={40} />
+              <h2>Share the tab playing your stream</h2>
+              <p>Pick the tab in Chrome’s share dialog and turn on “Share tab audio” to keep sound in sync.</p>
+              <button className="primary" onClick={handleStart} disabled={starting}>{starting ? 'Waiting for tab…' : 'Share a tab'}</button>
+            </div>
+          )}
+        </section>
+
+        <footer className="stage-footer">
+          <Disclaimer />
+          {capture && (
+            <dl className="stats">
+              <div><dt>Frame rate</dt><dd>{pipeline.measuredFps.toFixed(0)} fps</dd></div>
+              <div><dt>Delay</dt><dd>{(DELAY_SECONDS * 1000).toFixed(0)} ms</dd></div>
+              <div><dt>Audio</dt><dd>{capture.hasAudio ? 'In sync' : 'Not shared'}</dd></div>
             </dl>
-          </div>
-        </main>
+          )}
+        </footer>
+      </main>
 
-        <aside className="sidebar" aria-label="Flash measurements and controls">
-          <RatesPanel input={capture ? pipeline.input : null} output={capture ? pipeline.output : null} />
-          <RegionMap mask={capture ? mask : null} waiting={!capture || !pipeline.input} />
-          <RiskPanel input={capture ? pipeline.input : null} output={capture ? pipeline.output : null} />
-
-          <section className="panel controls" aria-labelledby="picture-title">
-            <h2 id="picture-title">Picture</h2>
-            <label>
-              <span className="row"><span>Brightness</span><output>{Math.round(settings.brightness * 100)}%</output></span>
-              <input type="range" min="0.3" max="1" step="0.01" style={fill(settings.brightness, 0.3, 1)} value={settings.brightness} onChange={e => setSettings(s => ({ ...s, brightness: Number(e.target.value) }))} />
-            </label>
-            <label>
-              <span className="row"><span>Saturation</span><output>{Math.round(settings.saturation * 100)}%</output></span>
-              <input type="range" min="0" max="1" step="0.01" style={fill(settings.saturation, 0, 1)} value={settings.saturation} onChange={e => setSettings(s => ({ ...s, saturation: Number(e.target.value) }))} />
-            </label>
-            <label className="toggle">
-              <input type="checkbox" role="switch" checked={settings.maxProtection} onChange={e => setSettings(s => ({ ...s, maxProtection: e.target.checked }))} />
-              <span><span className="toggle-title">Maximum protection</span><span className="helper">Damps the whole picture, not just flashing regions</span></span>
-            </label>
-          </section>
-
-          <section className="panel controls" aria-labelledby="audio-title">
-            <h2 id="audio-title">Audio</h2>
-            <fieldset disabled={!audioOn}>
-              <legend className="visually-hidden">Audio controls</legend>
-              <label>
-                <span className="row"><span>Bass reduction</span><output>{bassDb} dB</output></span>
-                <input type="range" min="-24" max="0" step="1" style={fill(bassDb, -24, 0)} value={bassDb} onChange={e => setBassDb(Number(e.target.value))} />
-              </label>
-              <label>
-                <span className="row"><span>Volume</span><output>{Math.round(volume * 100)}%</output></span>
-                <input type="range" min="0" max="1" step="0.01" style={fill(volume, 0, 1)} value={volume} onChange={e => setVolume(Number(e.target.value))} />
-              </label>
-            </fieldset>
-            {capture && !audioOn && <p className="helper">Tab audio wasn’t shared. Share again with “Share tab audio” turned on to use these.</p>}
-            {!capture && <p className="helper">Available after you share a tab with “Share tab audio” turned on.</p>}
-          </section>
-        </aside>
-      </div>
+      <aside className="sidebar" aria-label="Flash analysis and controls">
+        <section className="panel tally" aria-live="polite">
+          <p className="tally-number">{session.softened.toLocaleString()}</p>
+          <p className="tally-label">{session.softened === 1 ? 'flash' : 'flashes'} softened this session</p>
+          <p className="tally-sub">
+            {session.filteringSeconds > 0
+              ? `Filter active for ${formatDuration(session.filteringSeconds)}`
+              : capture ? 'Nothing to soften yet' : 'Share a tab to start counting'}
+          </p>
+        </section>
+        <section className="panel">
+          <h2>Flashes per second</h2>
+          <FlashChart input={pipeline.input} output={pipeline.output} />
+        </section>
+        <section className="panel">
+          <h2>Filtered regions</h2>
+          <DampingMap report={pipeline.input} />
+        </section>
+        <section className="panel">
+          <h2>Risk</h2>
+          <RiskMeters input={pipeline.input} output={pipeline.output} />
+        </section>
+        <section className="panel">
+          <h2>Picture</h2>
+          <Slider label="Brightness" value={settings.brightness} min={0.3} max={1} step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => setSettings((s) => ({ ...s, brightness: v }))} />
+          <Slider label="Saturation" value={settings.saturation} min={0} max={1} step={0.01}
+            format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => setSettings((s) => ({ ...s, saturation: v }))} />
+          <label className="switch">
+            <input type="checkbox" role="switch" checked={settings.maxProtection}
+              onChange={(e) => setSettings((s) => ({ ...s, maxProtection: e.target.checked }))} />
+            <span className="switch-track" aria-hidden="true" />
+            <span className="switch-text">
+              <span>Maximum protection</span>
+              <small>Damps the whole picture, not just flashing regions</small>
+            </span>
+          </label>
+        </section>
+        <section className="panel">
+          <h2>Audio</h2>
+          <fieldset disabled={!capture?.hasAudio || !audioRef.current}>
+            <Slider label="Bass reduction" value={bassDb} min={-24} max={0} step={1}
+              format={(v) => `${v} dB`} onChange={setBassDb} />
+            <Slider label="Volume" value={volume} min={0} max={1} step={0.01}
+              format={(v) => `${Math.round(v * 100)}%`} onChange={setVolume} />
+          </fieldset>
+          {capture && !capture.hasAudio && <p className="hint">Tab audio wasn’t shared. Share again with “Share tab audio” turned on to use these.</p>}
+        </section>
+      </aside>
     </div>
   );
+}
+
+function Slider({ label, value, min, max, step, format, onChange }: {
+  label: string; value: number; min: number; max: number; step: number;
+  format: (v: number) => string; onChange: (v: number) => void;
+}) {
+  const fill = ((value - min) / (max - min)) * 100;
+  return (
+    <label className="slider">
+      <span className="slider-head"><span>{label}</span><output>{format(value)}</output></span>
+      <input type="range" min={min} max={max} step={step} value={value}
+        style={{ '--fill': `${fill}%` } as CSSProperties}
+        onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m} min ${s} s` : `${s} s`;
 }

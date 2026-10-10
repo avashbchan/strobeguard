@@ -120,10 +120,9 @@ async function gestureClick(page, selectorJs) {
   await page.send('Runtime.evaluate', { userGesture: true, expression: `(${selectorJs}).click()` });
 }
 
-// Reads the app's own UI: the big flash-rate numbers ([data-rate]) and the role="meter" risk bars.
+// Reads the app's own UI: the big flash-rate numbers (.chart-key-value: original, filtered) and the role="meter" risk bars.
 const READ = `(() => {
-  const rate = (k) => parseFloat(document.querySelector('[data-rate=' + k + ']')?.textContent ?? '');
-  const g = [rate('input'), rate('output')];
+  const g = [...document.querySelectorAll('.chart-key-value')].map((e) => parseFloat(e.textContent ?? ''));
   const m = Object.fromEntries([...document.querySelectorAll('[role=meter]')].map((e) => [e.getAttribute('aria-label'), Number(e.getAttribute('aria-valuenow'))]));
   return { inFps: g[0], outFps: g[1], m, err: document.querySelector('.error')?.textContent ?? null };
 })()`;
@@ -195,9 +194,9 @@ try {
     });
   }
 
-  if (MAX_PROTECTION) await app.ev(`document.querySelector('label.toggle input').click()`);
+  if (MAX_PROTECTION) await app.ev(`document.querySelector('label.switch input').click()`);
   console.log(`App: ${APP}${MAX_PROTECTION ? '  (Maximum protection ON)' : ''}`);
-  console.log(`Pipeline: ${await app.ev(`[...document.querySelectorAll('.readout > *')].map((e) => e.textContent).join(' · ')`)}\n`);
+  console.log(`Pipeline: ${await app.ev(`[...document.querySelectorAll('.stats > *')].map((e) => e.textContent).join(' · ')`)}\n`);
 
   for (const p of PATTERNS) {
     await flash.ev(`document.querySelector('[data-p="${p.key}"]').click()`);
@@ -219,8 +218,8 @@ try {
     const maxMeter = (label) => Math.max(...ok.map((s) => s.m[label] ?? 0));
     const r = {
       inMax: max('inFps'), inMean: mean('inFps'), outMax: max('outFps'), outMean: mean('outFps'),
-      inRisk: maxMeter('Original general flash'), outRisk: maxMeter('Filtered general flash'),
-      inRed: maxMeter('Original red flash'), outRed: maxMeter('Filtered red flash'),
+      inRisk: maxMeter('General flash risk, original'), outRisk: maxMeter('General flash risk, filtered'),
+      inRed: maxMeter('Red flash risk, original'), outRed: maxMeter('Red flash risk, filtered'),
     };
     const problems = [];
     const err = samples.find((s) => s.err)?.err;
