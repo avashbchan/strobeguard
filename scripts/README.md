@@ -61,7 +61,12 @@ node scripts/grade.mjs --compare=baseline     # grade again; shows per-clip delt
 
 Options: `--only=concert-strobe,dialogue`, `--max-protection`, `--corpus=<json>`, `--videos=<dir>`
 (searched before `clips/`, the Drive set, and `test_videos/`), `--app=<url>`, `--save=<name>`. Clips are listed in `scripts/quality/corpus.json`
-(`calm` clips should come out unchanged; `strobe` clips must be damped). Reports and input|output
+(`calm` clips should come out unchanged; `strobe` clips must be damped; `partial` and `caution` cover
+small flashing areas and the 2–3 Hz band). Besides real clips, `synthetic` entries are scenes drawn frame by frame by
+`src/grader/synthetic.ts`, so everyone grades identical pictures with no video files: full-screen and partial red strobes,
+a 12.5% flash and a misaligned ~15% one (the detector over-counts that one as 25%+, see the IRIS gap G4), a flash just over
+the 25% rule, a 2.5 Hz caution-band flash, a strobe over a dark scene (veil test) and a calm half beside flashing lasers
+(collateral test). Reports and input|output
 pictures (the 3 most damaged frames per clip plus 3 fixed points) go to `<tmp>/strobeguard-grade/<run>/`.
 
 How it stays exact: the grader page (`src/grader/`) runs on a virtual clock (one frame = 1/30 s), so the
