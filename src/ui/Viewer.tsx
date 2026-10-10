@@ -6,6 +6,7 @@ import { Disclaimer } from './Disclaimer';
 import { usePipeline } from './usePipeline';
 import { DampingMap, FlashChart, RiskMeters } from './FlashGraph';
 import { Mark } from './Mark';
+import { RiskTimeline } from './RiskTimeline';
 
 export function Viewer() {
   const [capture, setCapture] = useState<Capture | null>(null);
@@ -230,6 +231,8 @@ export function Viewer() {
             </div>
           )}
         </section>
+
+        {capture && <RiskTimeline report={pipeline.input} sessionKey={capture} />}
 
         <footer className="stage-footer">
           <Disclaimer />

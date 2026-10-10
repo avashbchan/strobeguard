@@ -303,3 +303,24 @@ fieldset:disabled input[type=range] { cursor: not-allowed; }
   .warning, .warning.is-leaving, .app { animation: none; }
   .track span, .status-dot, .switch-track, .switch-track::after, .thumb canvas { transition: none; }
 }
+
+/* Session timeline: flagged parts of the whole share, growing as the stream runs.
+   Colour is always paired with the text key and per-part list. Nothing here animates. */
+.timeline { flex: none; margin: 0; padding: 10px 14px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.timeline figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.timeline h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.timeline figcaption span { color: var(--muted); font-size: 12px; }
+.timeline-bar { position: relative; height: 12px; margin-top: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.timeline-seg { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+.timeline-seg.level-fail, .tl-swatch.level-fail { background: var(--danger-text); }
+.timeline-seg.level-warning, .tl-swatch.level-warning { background: #c9b46e; }
+.timeline-seg.level-extended, .tl-swatch.level-extended { background: repeating-linear-gradient(135deg, #c9b46e 0 4px, #7f7344 4px 8px); }
+.timeline-now { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--muted); }
+.timeline-ticks { position: relative; height: 14px; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.timeline-ticks span { position: absolute; transform: translateX(-50%); }
+.timeline-ticks span:first-child { transform: none; }
+.timeline-legend { display: flex; flex-wrap: wrap; gap: 2px 16px; list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--text-2); }
+.timeline-legend li { display: inline-flex; align-items: center; gap: 6px; }
+/* Same list for screen readers; hidden visually so the bar and key carry the sighted view. */
+.timeline-parts { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tl-swatch { flex: none; width: 12px; height: 12px; border-radius: 2px; }
