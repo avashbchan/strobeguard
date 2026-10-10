@@ -7,7 +7,9 @@ Frozen contracts, renderer/detector code and package/config files are unchanged.
 - Context creation and resume start in the Share a tab click, before the share picker resolves.
 - Chain: source → delay → 200 Hz low-shelf → compressor/limiter → volume → destination.
 - Audio parameters ramp smoothly; gain starts muted until the buffer delay is initialized.
-- Delay follows renderer.delayFrames / measured buffer tick rate. The frame loop uses
+- Delay is fixed at renderer.delayFrames / 30, matching PR #11's capture-time renderer delay.
+  The readout uses the same constant (14 frames = 467 ms); measured FPS is shown separately
+  and does not change audio delay. The frame loop uses
   requestAnimationFrame capped at 30 fps (or a lower negotiated source rate), pushing the
   current pixels even when Chrome sends no new frame for a static or paused source.
 - Bass range: -24 to 0 dB; volume: 0 to 1.
