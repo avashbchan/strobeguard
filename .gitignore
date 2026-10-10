@@ -4,3 +4,6 @@ dist
 .DS_Store
 *.local
 .env*
+
+# Large test clips are shared via Drive, not git
+test_videos/
