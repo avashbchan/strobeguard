@@ -7,3 +7,8 @@ dist
 
 # Large test clips are shared via Drive, not git
 test_videos/
+
+# Test clips are shared via Google Drive (see clips/README.md), never committed.
+clips/*
+!clips/README.md
+clips-small/
