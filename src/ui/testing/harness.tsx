@@ -8,7 +8,7 @@ let active: MediaStream | null = null;
 let mode = 'audio';
 const checks = document.getElementById('checks')!;
 checks.style.cssText = 'padding:16px;border-bottom:1px solid #5676a1';
-checks.innerHTML = '<strong>Development checks · synthetic source only</strong> <label>Scenario <select id="scenario"><option value="audio">With audio</option><option value="silent">No audio</option><option value="cancel">Cancel sharing</option><option value="webgl">WebGL unavailable</option></select></label> <button id="end">Simulate tab closed</button> <output id="tracks"></output>';
+checks.innerHTML = '<strong>Development checks · synthetic source only</strong> <label>Scenario <select id="scenario"><option value="audio">With audio</option><option value="silent">No audio</option><option value="steady">Static grey (one frame)</option><option value="cancel">Cancel sharing</option><option value="webgl">WebGL unavailable</option></select></label> <button id="end">Simulate tab closed</button> <output id="tracks"></output>';
 const scenario = document.getElementById('scenario') as HTMLSelectElement;
 scenario.onchange = () => { mode = scenario.value; };
 document.getElementById('end')!.onclick = () => {
@@ -26,6 +26,12 @@ navigator.mediaDevices.getDisplayMedia = async () => {
   const ctx = canvas.getContext('2d')!;
   let frame = 0;
   const stream = canvas.captureStream(30);
+  const steady = mode === 'steady';
+  if (steady) {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, 640, 360);
+    (stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack).requestFrame();
+  }
   let generatedAudio: AudioContext | null = null;
   active = stream;
   if (mode === 'audio') {
@@ -47,6 +53,7 @@ navigator.mediaDevices.getDisplayMedia = async () => {
       generatedAudio = null;
       return;
     }
+    if (steady) return; // Deliberately never draw another source frame.
     ctx.fillStyle = '#24384c'; ctx.fillRect(0, 0, 640, 360);
     ctx.fillStyle = '#e6edf5'; ctx.font = '24px system-ui';
     ctx.fillText('Synthetic source · frame ' + frame++, 40, 170);
