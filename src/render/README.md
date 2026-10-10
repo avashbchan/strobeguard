@@ -35,3 +35,11 @@ Milestone 2/4/5: WebGL setup and shaders (passthrough → damping → centered s
 - `gl.ts` — compile/link helpers.
 - `history.ts` — ping-pong low-passed luminance textures.
 - `debugMask.ts` — dev-only `?debugMask=` override.
+
+## Display timing (fix after integration)
+- The displayed frame is chosen by **capture time**, not slot position: the frame whose age is closest to
+  `(BUFFER_FRAMES − 1) × average frame interval` (`frameRing.indexForAge`). The average interval is a slow EMA of
+  push gaps (stalls > 250 ms ignored), so the delay matches the UI's audio delay `delayFrames / measuredFps`.
+- Why: with uneven frame ticks, always showing the oldest slot replays frames faster than they were captured.
+  In the end-to-end test a 2 Hz flash (safe) came out at 3–4 flashes/s. Offline with random tick gaps and the
+  mask at 0: old 2 Hz → 3.0 out, time-based → 2.0 out. Real tab-capture E2E after the fix: 7/7 patterns pass (twice).

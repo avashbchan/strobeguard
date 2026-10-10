@@ -1,5 +1,6 @@
 // OWNER: Person A (render + buffer). Public API is frozen — see team/CONTRACTS.md.
-// Displays the OLDEST frame of a 15-frame ring buffer (14-frame look-ahead for the detector),
+// Displays the frame captured ~14 frame intervals ago from a 15-frame ring buffer (the
+// look-ahead for the detector), chosen by capture time so uneven ticks don't speed up playback,
 // filtered per pixel by the 8×6 damping mask (milestones 4–5):
 //   pass 1: centered temporal low-pass of luminance (4 look-ahead frames + recursive history)
 //   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
@@ -24,6 +25,11 @@ export type Renderer = {
 
 /** Uniform names for the buffered frames 1..4 newer than the displayed one. */
 const FUTURE_UNIFORMS = ['uFuture1', 'uFuture2', 'uFuture3', 'uFuture4'] as const;
+
+/** Frame interval assumed before any frames arrive (30 fps). */
+const DEFAULT_INTERVAL_MS = 1000 / 30;
+/** Ignore gaps longer than this (stalled/background tab) when estimating the frame interval. */
+const MAX_INTERVAL_MS = 250;
 
 /** maxProtection: every cell gets at least this much damping. */
 const MAX_PROTECTION_FLOOR = 0.8;
@@ -63,6 +69,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   const debugMask = readDebugMask();
 
+  // Display delay in TIME: delayFrames × the average frame interval. This equals the audio
+  // delay the UI sets (delayFrames / measured fps), and keeps playback on the capture timeline.
+  let intervalMs = DEFAULT_INTERVAL_MS;
+  let lastPushMs = NaN;
+
   function uploadMask(mask: readonly number[]) {
     for (let i = 0; i < CELL_COUNT; i++) {
       const v = mask[i] ?? 0;
@@ -80,7 +91,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   return {
     pushFrame(video) {
-      ring.push(video);
+      const now = performance.now();
+      if (Number.isFinite(lastPushMs)) {
+        const dt = Math.min(now - lastPushMs, MAX_INTERVAL_MS);
+        intervalMs += 0.05 * (dt - intervalMs); // slow average: the delay must not wobble
+      }
+      lastPushMs = now;
+      ring.push(video, now);
       if (ring.width === 0) return;
       // Match the drawing buffer to the source resolution.
       if (canvas.width !== ring.width || canvas.height !== ring.height) {
@@ -92,8 +109,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
     draw(mask, settings) {
       gl.viewport(0, 0, canvas.width, canvas.height);
-      // Displayed frame = oldest held frame (until the buffer fills, the oldest available).
-      const frame = ring.textureFromOldest(0);
+      // Displayed frame = the one captured (delayFrames × interval) ago; while the buffer is
+      // still filling that is the oldest available. Newer frames after it are the look-ahead.
+      const shown = ring.indexForAge(performance.now(), (BUFFER_FRAMES - 1) * intervalMs);
+      const frame = ring.textureFromOldest(shown);
       if (!frame) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.clearColor(0, 0, 0, 1);
@@ -113,7 +132,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       // Look-ahead frames for centered smoothing (units 3–6). Clamped to the newest available
       // frame while the buffer is still filling.
       FUTURE_UNIFORMS.forEach((name, i) => {
-        bindTex(3 + i, ring.textureFromOldest(i + 1));
+        bindTex(3 + i, ring.textureFromOldest(shown + i + 1));
         gl.uniform1i(hu[name], 3 + i);
       });
       gl.uniform1i(hu.uFrame, 0);
