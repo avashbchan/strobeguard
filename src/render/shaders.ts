@@ -96,6 +96,7 @@ out vec4 outColor;
 const float CONTRAST_CUT = 0.4; // at m = 1, attenuate linear light by 40%
 const float RED_RATIO = 0.8;    // saturated red: R/(R+G+B) >= 0.8 (same as detector)
 const float RED_TARGET_RATIO = 0.65; // retain red hue below the saturated-red boundary
+const float MAX_LIFT_GAIN = 4.0; // cap on brightening by gain, so near-black noise isn't amplified
 
 void main() {
   vec3 src = texture(uFrame, vUv).rgb;
@@ -103,14 +104,18 @@ void main() {
   vec3 rgb = src; // m = 0 → exactly the source texel
 
   if (m > 0.0) {
-    // Use the smoothed luminance as a ceiling: dim bright excursions without carrying
-    // a previous flash into dark pixels. Scaling current-frame linear RGB preserves its
-    // channel proportions and avoids the grey veil produced by an additive RGB offset.
+    // Pull the pixel's luminance to the smoothed value in BOTH directions, so the dark half of
+    // a flash is raised as well as the bright half dimmed (a one-sided ceiling leaves a
+    // black↔grey swing, i.e. the flash survives). Scaling linear RGB keeps channel proportions
+    // (no grey veil); only what a capped gain can't reach (near-black pixels) is added as a
+    // neutral offset. A pixel that stays dark has target ≈ its own luminance, so steady
+    // shadows are not lifted.
     vec3 lin = toLinear(src);
     float target = texture(uHistory, vUv).r;
     float sourceLuma = luminance(lin);
-    float gain = clamp(target / max(sourceLuma, 1e-5), 0.0, 1.0);
+    float gain = clamp(target / max(sourceLuma, 1e-5), 0.0, MAX_LIFT_GAIN);
     lin *= gain;
+    lin = clamp(lin + max(target - sourceLuma * gain, 0.0), 0.0, 1.0);
     rgb = toSrgb(lin);
 
     // Compress excessive red saturation instead of erasing all chroma. Ramp in below the
