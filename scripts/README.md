@@ -13,8 +13,9 @@ ONLY=flash5,flash2 node scripts/flash-e2e.mjs           # subset of patterns
 TRACE=1 node scripts/flash-e2e.mjs                      # also dump detector reports to trace-*.json
 ```
 
-Needs Node ≥ 22 and Google Chrome (set `CHROME=/path/to/chrome` if it isn't in the default macOS
-location). No npm dependencies. Takes about 80 s. Exit code 0 = all checks pass, 1 = a check failed,
+Needs Node ≥ 22 and Google Chrome. The default install location is found automatically on macOS,
+Windows (`Program Files`, `Program Files (x86)` or `%LOCALAPPDATA%`) and Linux (`google-chrome`);
+otherwise set `CHROME=/path/to/chrome`. Works from Git Bash, PowerShell or cmd on Windows. No npm dependencies. Takes about 80 s. Exit code 0 = all checks pass, 1 = a check failed,
 2 = the run broke.
 
 Chrome opens off-screen with a temporary profile and is closed afterwards. The test page flashes on
