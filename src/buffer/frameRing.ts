@@ -25,6 +25,8 @@ export type FrameRing = {
    * frames faster or slower than they happened, which can make flashes look faster.
    */
   indexForAge(nowMs: number, targetAgeMs: number): number;
+  /** Capture time (ms) of the frame `k` newer than the oldest (clamped like textureFromOldest). */
+  timeFromOldest(k: number): number;
   dispose(): void;
 };
 
@@ -107,6 +109,12 @@ export function createFrameRing(gl: WebGL2RenderingContext, capacity: number): F
         }
       }
       return best;
+    },
+    timeFromOldest(k) {
+      if (count === 0) return -Infinity;
+      const clamped = Math.max(0, Math.min(k, count - 1));
+      const oldest = (writeIndex - count + capacity) % capacity;
+      return times[(oldest + clamped) % capacity] ?? -Infinity;
     },
     dispose() {
       freeTextures();

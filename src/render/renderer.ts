@@ -1,6 +1,7 @@
 // OWNER: Person A (render + buffer). Public API is frozen — see team/CONTRACTS.md.
-// Displays the frame captured ~14 frame intervals ago from a 15-frame ring buffer (the
-// look-ahead for the detector), chosen by capture time so uneven ticks don't speed up playback,
+// Displays the frame captured a fixed 467 ms ago (14 frames at 30 fps) from a 15-frame ring
+// buffer (the look-ahead for the detector), chosen by capture time so uneven ticks and stalls
+// never speed up or reverse playback,
 // filtered per pixel by the 8×6 damping mask (milestones 4–5):
 //   pass 1: centered temporal low-pass of luminance (4 look-ahead frames + recursive history)
 //   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
@@ -18,7 +19,8 @@ export type Renderer = {
   pushFrame(video: HTMLVideoElement): void;
   /** Draw the displayed (oldest buffered) frame to the output canvas, filtered by mask + settings. */
   draw(mask: readonly number[], settings: FilterSettings): void;
-  /** Frames between capture and display (BUFFER_FRAMES - 1). Audio delay = delayFrames / fps. */
+  /** Frames between capture and display (BUFFER_FRAMES - 1). The video delay is fixed at
+   *  delayFrames / 30 fps = 467 ms, so the audio delay should be the same constant. */
   readonly delayFrames: number;
   dispose(): void;
 };
@@ -26,10 +28,13 @@ export type Renderer = {
 /** Uniform names for the buffered frames 1..4 newer than the displayed one. */
 const FUTURE_UNIFORMS = ['uFuture1', 'uFuture2', 'uFuture3', 'uFuture4'] as const;
 
-/** Frame interval assumed before any frames arrive (30 fps). */
-const DEFAULT_INTERVAL_MS = 1000 / 30;
-/** Ignore gaps longer than this (stalled/background tab) when estimating the frame interval. */
-const MAX_INTERVAL_MS = 250;
+/**
+ * Fixed display delay: delayFrames at the nominal 30 fps = 467 ms. A constant delay keeps the
+ * output on the capture timeline; an adaptive one (tracking the measured frame rate) shifts
+ * when the frame loop stalls, which replays frames faster or backwards and can add flashes.
+ */
+const NOMINAL_FPS = 30;
+const DISPLAY_DELAY_MS = ((BUFFER_FRAMES - 1) * 1000) / NOMINAL_FPS;
 
 /** maxProtection: every cell gets at least this much damping. */
 const MAX_PROTECTION_FLOOR = 0.8;
@@ -69,10 +74,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   const debugMask = readDebugMask();
 
-  // Display delay in TIME: delayFrames × the average frame interval. This equals the audio
-  // delay the UI sets (delayFrames / measured fps), and keeps playback on the capture timeline.
-  let intervalMs = DEFAULT_INTERVAL_MS;
-  let lastPushMs = NaN;
+  // Capture time of the last frame shown. Playback must never step back in source time:
+  // re-showing an older frame after a newer one can insert a flash that isn't in the source.
+  let lastShownMs = -Infinity;
 
   function uploadMask(mask: readonly number[]) {
     for (let i = 0; i < CELL_COUNT; i++) {
@@ -91,13 +95,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   return {
     pushFrame(video) {
-      const now = performance.now();
-      if (Number.isFinite(lastPushMs)) {
-        const dt = Math.min(now - lastPushMs, MAX_INTERVAL_MS);
-        intervalMs += 0.05 * (dt - intervalMs); // slow average: the delay must not wobble
-      }
-      lastPushMs = now;
-      ring.push(video, now);
+      ring.push(video, performance.now());
       if (ring.width === 0) return;
       // Match the drawing buffer to the source resolution.
       if (canvas.width !== ring.width || canvas.height !== ring.height) {
@@ -109,9 +107,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
     draw(mask, settings) {
       gl.viewport(0, 0, canvas.width, canvas.height);
-      // Displayed frame = the one captured (delayFrames × interval) ago; while the buffer is
-      // still filling that is the oldest available. Newer frames after it are the look-ahead.
-      const shown = ring.indexForAge(performance.now(), (BUFFER_FRAMES - 1) * intervalMs);
+      // Displayed frame = the one captured DISPLAY_DELAY_MS ago (while the buffer is still
+      // filling, the oldest available). Newer frames after it are the look-ahead.
+      let shown = ring.indexForAge(performance.now(), DISPLAY_DELAY_MS);
+      while (shown < ring.count - 1 && ring.timeFromOldest(shown) < lastShownMs) shown++;
+      lastShownMs = ring.timeFromOldest(shown);
       const frame = ring.textureFromOldest(shown);
       if (!frame) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

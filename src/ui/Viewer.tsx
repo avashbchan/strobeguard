@@ -21,6 +21,8 @@ export function Viewer() {
   const thumbRef = useRef<HTMLCanvasElement>(null);
   const outputRef = useRef<HTMLCanvasElement>(null);
   const pipeline = usePipeline(capture, outputRef, settings);
+  // Match the renderer's fixed capture-time delay, independent of GPU throughput.
+  const DELAY_SECONDS = pipeline.delayFrames / 30;
 
   function stopCapture() {
     generation.current++;
@@ -83,10 +85,10 @@ export function Viewer() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!capture || !audio) return;
-    audio.setDelaySeconds(pipeline.delayFrames / Math.max(1, pipeline.measuredFps));
+    audio.setDelaySeconds(DELAY_SECONDS);
     audio.setBassDb(bassDb);
     audio.setVolume(pipeline.delayFrames > 0 ? volume : 0);
-  }, [capture, pipeline.delayFrames, pipeline.measuredFps, bassDb, volume]);
+  }, [capture, pipeline.delayFrames, DELAY_SECONDS, bassDb, volume]);
 
   useEffect(() => {
     if (!capture || !pipeline.error) return;
@@ -135,7 +137,7 @@ export function Viewer() {
           </figure>
         </section>
         <p className="readout">
-          {pipeline.measuredFps.toFixed(1)} buffer fps · Video buffer {pipeline.delayFrames} frames · Buffer delay {(pipeline.delayFrames / Math.max(1, pipeline.measuredFps) * 1000).toFixed(0)} ms
+          {pipeline.measuredFps.toFixed(1)} buffer fps · Video buffer {pipeline.delayFrames} frames · Buffer delay {(DELAY_SECONDS * 1000).toFixed(0)} ms
           {!capture.hasAudio && ' · no audio shared'}
         </p>
         <section className="graphs" aria-label="Flash rate comparison">
