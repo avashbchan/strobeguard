@@ -1,5 +1,7 @@
 /** Drive the buffer by elapsed time, including duplicate frames from static sources. */
 export function createFrameClock(sourceRate: number) {
+  // A slightly early rAF callback should count instead of waiting a full display frame.
+  const EARLY_MS = 4;
   const rate = Number.isFinite(sourceRate) && sourceRate > 0 ? Math.min(30, sourceRate) : 30;
   const interval = 1000 / rate;
   let nextAt: number | null = null;
@@ -14,7 +16,7 @@ export function createFrameClock(sourceRate: number) {
         sampleAt = now;
         return true;
       }
-      if (now + 0.01 < nextAt) return false;
+      if (now + EARLY_MS < nextAt) return false;
       // Preserve cadence without catch-up bursts after a stalled/background tab.
       nextAt += (Math.floor(Math.max(0, now - nextAt) / interval) + 1) * interval;
       count++;
