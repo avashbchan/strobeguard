@@ -1,7 +1,7 @@
 // OWNER: Person A (render + buffer). Public API is frozen — see team/CONTRACTS.md.
 // Displays the OLDEST frame of a 15-frame ring buffer (14-frame look-ahead for the detector),
-// filtered per pixel by the 8×6 damping mask (milestone 4):
-//   pass 1: temporal low-pass of luminance into a history texture
+// filtered per pixel by the 8×6 damping mask (milestones 4–5):
+//   pass 1: centered temporal low-pass of luminance (4 look-ahead frames + recursive history)
 //   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
 // Where the mask is 0 (and settings are neutral) the output equals the source exactly.
 
@@ -22,6 +22,9 @@ export type Renderer = {
   dispose(): void;
 };
 
+/** Uniform names for the buffered frames 1..4 newer than the displayed one. */
+const FUTURE_UNIFORMS = ['uFuture1', 'uFuture2', 'uFuture3', 'uFuture4'] as const;
+
 /** maxProtection: every cell gets at least this much damping. */
 const MAX_PROTECTION_FLOOR = 0.8;
 
@@ -37,7 +40,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   const historyProgram = createProgram(gl, FULLSCREEN_VERT, HISTORY_FRAG);
   const filterProgram = createProgram(gl, FULLSCREEN_VERT, FILTER_FRAG);
-  const hu = uniforms(gl, historyProgram, ['uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid']);
+  const hu = uniforms(gl, historyProgram, [
+    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid',
+    'uFuture1', 'uFuture2', 'uFuture3', 'uFuture4',
+  ]);
   const fu = uniforms(gl, filterProgram, [
     'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uBrightness', 'uSaturation',
   ]);
@@ -100,10 +106,16 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       bindTex(0, frame);
       bindTex(1, maskTex);
 
-      // Pass 1: low-passed luminance → history[write].
+      // Pass 1: centered low-passed luminance → history[write].
       gl.bindFramebuffer(gl.FRAMEBUFFER, history.writeFbo);
       gl.useProgram(historyProgram);
       bindTex(2, history.read);
+      // Look-ahead frames for centered smoothing (units 3–6). Clamped to the newest available
+      // frame while the buffer is still filling.
+      FUTURE_UNIFORMS.forEach((name, i) => {
+        bindTex(3 + i, ring.textureFromOldest(i + 1));
+        gl.uniform1i(hu[name], 3 + i);
+      });
       gl.uniform1i(hu.uFrame, 0);
       gl.uniform1i(hu.uMask, 1);
       gl.uniform1i(hu.uHistory, 2);

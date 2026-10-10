@@ -34,24 +34,39 @@ float maskAt(vec2 uv) {
 }
 `;
 
-// Pass 1 → history texture. A per-pixel recursive (IIR) low-pass on linear luminance:
-//   hist = mix(L_now, hist_prev, k * m)
-// With m = 0 the history just tracks the current frame; with m = 1 each frame only moves it
-// ~7% of the way, so a 5 Hz on/off flash collapses to a small ripple around the average.
+// Pass 1 → history texture. Centered temporal low-pass on linear luminance (milestones 4–5):
+//   future side: weighted average of the displayed frame and the next 4 buffered (newer) frames,
+//                weights 5,4,3,2,1 — a flash starts pulling the average before it is on screen;
+//   past side:   recursive (IIR) blend with the previous output, hist_prev.
+//   Lc   = mix(L_0, futureAvg, m)
+//   hist = mix(Lc, hist_prev, k * m)
+// With m = 0 this is exactly L_0; with m = 1 a 5 Hz on/off flash collapses to a small ripple.
 // The history holds the luminance actually shown, so the filter's own output is what gets smoothed.
 export const HISTORY_FRAG = `#version 300 es
 ${COMMON}
 uniform sampler2D uHistory;  // previous low-passed luminance (r channel)
 uniform float uHistoryValid; // 0 on the first frame / after a resize
+uniform sampler2D uFuture1;  // buffered frames 1..4 newer than the displayed one
+uniform sampler2D uFuture2;
+uniform sampler2D uFuture3;
+uniform sampler2D uFuture4;
 out vec4 outColor;
 
-const float K_TEMPORAL = 0.93;
+const float K_TEMPORAL = 0.9;
+
+float lumaOf(sampler2D tex) {
+  return luminance(toLinear(texture(tex, vUv).rgb));
+}
 
 void main() {
-  float lNow = luminance(toLinear(texture(uFrame, vUv).rgb));
+  float m = maskAt(vUv);
+  float l0 = lumaOf(uFrame);
+  float futureAvg = (5.0 * l0 + 4.0 * lumaOf(uFuture1) + 3.0 * lumaOf(uFuture2)
+                   + 2.0 * lumaOf(uFuture3) + 1.0 * lumaOf(uFuture4)) / 15.0;
+  float lc = mix(l0, futureAvg, m);
   float lPrev = texture(uHistory, vUv).r;
-  float a = K_TEMPORAL * maskAt(vUv) * uHistoryValid;
-  outColor = vec4(mix(lNow, lPrev, a), 0.0, 0.0, 1.0);
+  float a = K_TEMPORAL * m * uHistoryValid;
+  outColor = vec4(mix(lc, lPrev, a), 0.0, 0.0, 1.0);
 }
 `;
 
