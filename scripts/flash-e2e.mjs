@@ -4,11 +4,13 @@
 //
 // appUrl defaults to https://strobeguard.vercel.app (use http://localhost:5173 for `npm run dev`).
 // Launches Chrome with a temporary profile and off-screen windows, opens /test/flash.html in its own
-// window, shares it into the app with a real mouse click, then runs every flash pattern and checks
+// window, shares it into the app with a real mouse click (script click with user activation as a
+// fallback), then runs every flash pattern and checks
 // the app's own readouts (input vs output flashes/s, risk meters).
 //
 // Exit code: 0 all checks pass, 1 a check failed, 2 the run itself broke.
-// Env: CHROME=<path to Chrome binary>, ONLY=flash5,flash2 (subset of patterns),
+// Env: CHROME=<path to Chrome binary> (default: the usual install path on macOS, Windows or Linux),
+//      ONLY=flash5,flash2 (subset of patterns),
 //      TRACE=1 (also write per-report detector traces to trace-<pattern>.json in the cwd).
 // Needs Node >= 22 (global WebSocket) and Google Chrome. No npm dependencies.
 //
@@ -16,13 +18,23 @@
 // but do not watch them if you are photosensitive.
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const APP = (process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 'https://strobeguard.vercel.app').replace(/\/$/, '');
 const MAX_PROTECTION = process.argv.includes('--max-protection');
-const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+function defaultChrome() {
+  if (process.platform === 'win32') {
+    const roots = [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter(Boolean);
+    const found = roots.map((r) => join(r, 'Google', 'Chrome', 'Application', 'chrome.exe')).find(existsSync);
+    return found ?? 'chrome.exe';
+  }
+  if (process.platform === 'linux') return 'google-chrome';
+  return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+}
+const CHROME = process.env.CHROME || defaultChrome();
 const PORT = 9335;
 const WARMUP_MS = 4000; // 1 s detector window + mask easing + buffer delay
 const SAMPLE_MS = 6000;
@@ -48,8 +60,16 @@ const chrome = spawn(CHROME, [
   '--window-position=-3000,-3000', '--window-size=1100,900',
   // The share picker auto-selects the tab whose title contains this (the flash test page).
   '--auto-select-tab-capture-source-by-title=flash test page',
-  '--autoplay-policy=no-user-gesture-required', `${APP}/`,
+  '--autoplay-policy=no-user-gesture-required',
+  // Keep the off-screen windows painting. Without these, Windows treats them as occluded and
+  // stops rendering, so tab capture delivers no frames.
+  '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
+  `${APP}/`,
 ], { stdio: 'ignore' });
+chrome.on('error', (e) => {
+  console.error(`Could not start Chrome at "${CHROME}" (${e.message}). Set CHROME=<path to Chrome>.`);
+  process.exit(2);
+});
 
 // Minimal Chrome DevTools Protocol client.
 async function cdpConnect(wsUrl) {
@@ -92,6 +112,12 @@ async function realClick(page, selectorJs) {
   for (const type of ['mousePressed', 'mouseReleased']) {
     await page.send('Input.dispatchMouseEvent', { type, x: pos[0], y: pos[1], button: 'left', clickCount: 1 });
   }
+}
+
+// Fallback when the mouse click is lost (Windows doesn't deliver CDP mouse events to an off-screen
+// window): a script click with userGesture, which also counts as user activation.
+async function gestureClick(page, selectorJs) {
+  await page.send('Runtime.evaluate', { userGesture: true, expression: `(${selectorJs}).click()` });
 }
 
 // Reads the app's own UI: graph captions ("N flashes/s") and the role="meter" risk bars.
@@ -145,12 +171,16 @@ try {
   await waitFor(() => app.ev(`!!document.querySelector('button')`));
   await app.ev(`[...document.querySelectorAll('button')].find((b) => /understand|continue/i.test(b.textContent))?.click()`);
   await sleep(500);
-  await realClick(app, `[...document.querySelectorAll('button')].find((b) => /share a tab/i.test(b.textContent))`);
+  const SHARE_BUTTON = `[...document.querySelectorAll('button')].find((b) => /share a tab/i.test(b.textContent))`;
+  await realClick(app, SHARE_BUTTON);
+  await sleep(1000);
+  // Still showing an enabled "Share a tab" button means the click didn't register.
+  if (await app.ev(`!!(${SHARE_BUTTON}) && !(${SHARE_BUTTON}).disabled`)) await gestureClick(app, SHARE_BUTTON);
 
   const results = [];
   // Static source check: the flash page starts on a steady grey screen, and tab capture sends
   // no new frames for unchanging content. The big canvas must still show it.
-  await sleep(3000);
+  await sleep(2000);
   const staticWidth = await app.ev(`document.querySelector('canvas.output')?.width ?? 0`);
   const staticOk = staticWidth > 300; // 300 = default canvas width, i.e. never drew a frame
   results.push(staticOk);
