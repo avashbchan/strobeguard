@@ -7,6 +7,7 @@ import { usePipeline } from './usePipeline';
 import { DampingMap, FlashChart, RiskMeters } from './FlashGraph';
 import { Mark } from './Mark';
 import { RiskTimeline } from './RiskTimeline';
+import { OriginalPreview } from './OriginalPreview';
 
 export function Viewer() {
   const [capture, setCapture] = useState<Capture | null>(null);
@@ -20,7 +21,6 @@ export function Viewer() {
   const audioRef = useRef<AudioChain | null>(null);
   const startingRef = useRef(false);
   const generation = useRef(0);
-  const thumbRef = useRef<HTMLCanvasElement>(null);
   const outputRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -30,8 +30,6 @@ export function Viewer() {
   // Session counter: once a second, add how many flashes the filter removed in that second
   // (original area rate minus filtered area rate). Kept for the whole page session.
   const [session, setSession] = useState({ softened: 0, filteringSeconds: 0 });
-  const [thumbRevealed, setThumbRevealed] = useState(false);
-  const [thumbCollapsed, setThumbCollapsed] = useState(false);
   // Match the renderer's fixed capture-time delay, independent of GPU throughput.
   const DELAY_SECONDS = pipeline.delayFrames / 30;
 
@@ -106,21 +104,6 @@ export function Viewer() {
     setError(pipeline.error);
     stopCapture();
   }, [capture, pipeline.error]);
-
-  useEffect(() => {
-    if (!capture) return;
-    const canvas = thumbRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    let handle = 0;
-    const draw = () => {
-      const video = capture.video;
-      if (video.readyState >= 2 && video.videoWidth > 0) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      handle = requestAnimationFrame(draw);
-    };
-    handle = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(handle);
-  }, [capture]);
 
   useEffect(() => () => {
     generation.current++;
@@ -199,29 +182,7 @@ export function Viewer() {
                 ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3v5H3M12 3v5h5M8 17v-5H3M12 17v-5h5" /></svg>
                 : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" /></svg>}
             </button>
-            <figure className={`thumb${thumbCollapsed ? ' is-collapsed' : ''}${thumbRevealed ? ' is-revealed' : ''}`}>
-              <figcaption className="thumb-head">
-                <span className="thumb-label">Original</span>
-                {!thumbCollapsed && (
-                  <button className="thumb-icon" onClick={() => setThumbRevealed((v) => !v)} aria-pressed={thumbRevealed}
-                    aria-label={thumbRevealed ? 'Blur the original preview' : 'Unblur the original preview'} title={thumbRevealed ? 'Blur' : 'Unblur'}>
-                    {thumbRevealed
-                      ? <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" /><circle cx="10" cy="10" r="2.5" /><path d="M3 3l14 14" /></svg>
-                      : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" /><circle cx="10" cy="10" r="2.5" /></svg>}
-                  </button>
-                )}
-                <button className="thumb-icon" onClick={() => setThumbCollapsed((v) => !v)} aria-expanded={!thumbCollapsed}
-                  aria-label={thumbCollapsed ? 'Show the original preview' : 'Collapse the original preview'} title={thumbCollapsed ? 'Expand' : 'Collapse'}>
-                  <svg viewBox="0 0 20 20" aria-hidden="true">{thumbCollapsed ? <path d="M6 12l4-4 4 4" /> : <path d="M6 8l4 4 4-4" />}</svg>
-                </button>
-              </figcaption>
-              <div className="thumb-body">
-                <canvas ref={thumbRef} width={256} height={144} aria-label="Small preview of the original, unfiltered stream" />
-                {!thumbRevealed && (
-                  <button className="thumb-reveal" onClick={() => setThumbRevealed(true)}>Unblur original</button>
-                )}
-              </div>
-            </figure>
+            <OriginalPreview video={capture.video} stageRef={stageRef} />
           </> : (
             <div className="empty">
               <Mark size={40} />
