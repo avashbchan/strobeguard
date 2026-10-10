@@ -12,7 +12,7 @@ import { createFrameRing } from '../buffer/frameRing.ts';
 import { createProgram } from './gl.ts';
 import { createLumaHistory } from './history.ts';
 import { readDebugMask } from './debugMask.ts';
-import { FILTER_FRAG, FULLSCREEN_VERT, HISTORY_FRAG } from './shaders.ts';
+import { FILTER_FRAG, FULLSCREEN_VERT, HISTORY_FRAG, TEXTURE_VERT } from './shaders.ts';
 
 export type Renderer = {
   /** Upload the newest video frame into the ring buffer. Call once per new source frame. */
@@ -49,7 +49,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   const history = createLumaHistory(gl);
   let historyValid = false;
 
-  const historyProgram = createProgram(gl, FULLSCREEN_VERT, HISTORY_FRAG);
+  const historyProgram = createProgram(gl, TEXTURE_VERT, HISTORY_FRAG); // renders into a texture
   const filterProgram = createProgram(gl, FULLSCREEN_VERT, FILTER_FRAG);
   const hu = uniforms(gl, historyProgram, [
     'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid',
