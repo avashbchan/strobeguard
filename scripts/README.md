@@ -27,6 +27,7 @@ purpose, so don't watch those windows if you are photosensitive.
 | `flash5`, `red5` (dangerous) | input > 3 flashes/s **and** output < 3 flashes/s (red: input red risk > 0) |
 | `steady`, `flash2`, `single`, `fade`, `corner5` (safe) | input < 3 flashes/s |
 | all patterns | output never flashes more than input (+0.5) |
+| Session timeline | `flash5`, `red5` add a **high risk** segment; `flash2` (2 Hz for > 4 s) adds a **sustained caution** segment; calm patterns add nothing new (after a 1.5 s tail from the previous pattern). Skipped on builds without the timeline. |
 
 ## `iris-compare.mjs` — compare our detector with EA IRIS
 
@@ -44,4 +45,43 @@ Our results are cached per video and detector version, and the report is rewritt
 so an interrupted run resumes. Reports land in `<tmp>/strobeguard-iris/report/`. Long clips take about as
 long as their duration (real-time playback). Needs Windows for the IRIS app; the 8 test videos can fall back
 to IRIS's published expected CSVs elsewhere.
-| Session timeline | `flash5`, `red5` add a **high risk** segment; `flash2` (2 Hz for > 4 s) adds a **sustained caution** segment; calm patterns add nothing new (after a 1.5 s tail from the previous pattern). Skipped on builds without the timeline. |
+
+## `grade.mjs` — objective output-quality grading
+
+Runs the **real** filter on video clips frame by frame and compares every output frame with the exact
+unfiltered frame it shows. Use it to grade any change to the filter: save a baseline, change the code,
+compare.
+
+```bash
+npm run dev
+node scripts/grade.mjs --save=baseline        # grade the current code and keep it as "baseline"
+# ...change the filter...
+node scripts/grade.mjs --compare=baseline     # grade again; shows per-clip deltas (✓ better, ✗ worse)
+```
+
+Options: `--only=concert-strobe,dialogue`, `--max-protection`, `--corpus=<json>`, `--videos=<dir>`
+(default `test_videos/`), `--app=<url>`, `--save=<name>`. Clips are listed in `scripts/quality/corpus.json`
+(`calm` clips should come out unchanged; `strobe` clips must be damped). Reports and input|output
+pictures (the 3 most damaged frames per clip plus 3 fixed points) go to `<tmp>/strobeguard-grade/<run>/`.
+
+How it stays exact: the grader page (`src/grader/`) runs on a virtual clock (one frame = 1/30 s), so the
+renderer shows exactly the frame from 14 steps earlier, and the reference "input" is a second copy of
+the renderer with an all-zero mask (same frame, same decode path the viewer sees). A calm clip scores
+100.0 with every metric at its ideal value.
+
+| What can go wrong | Metric (OKLab, per frame, averaged) | Ideal |
+|---|---|---|
+| Pixels changed where nothing flashes | **Collateral ΔE** in areas the mask doesn't touch (≈1 just noticeable, ≥5 obvious) | 0 |
+| Greyscaling / lost colour | **Chroma kept** (out / in), **Greyed** (% colourful pixels that lost > half their chroma) | 100%, 0% |
+| Colour shifts | **Hue shift** (chroma-weighted, degrees) | 0 |
+| Dimming / mud | **Light** (mean lightness out / in) | 1.00 |
+| Grey haze / veil | **Black lift** (5th-percentile lightness out − in) | 0 |
+| Blur, lost detail | **Edges** (edge energy out / in), **SSIM** (structure) | 1.00 |
+| Trails / ghosting | **Ghost** (edges in the output that aren't in the input / input edges) | 0 |
+| Flashes getting through (safety) | The detector run on the output: **Out max /s**, **Out >3/s (s)**, red risk | < 3, 0 |
+
+**Score** (0–100) = collateral 25 + colour 20 + hue 10 + structure 20 + clarity 15 + tone 10.
+**Safe** = output over 3 flashes/s for at most 0.5 s per clip and no full red-flash risk. A change only
+counts as an improvement if the score goes up **and** every clip stays safe. Strobe clips can't reach
+100: suppressing a flash necessarily changes those frames. Compare them between versions, not to 100.
+Metric unit tests: `node --test src/grader/metrics.test.ts`.

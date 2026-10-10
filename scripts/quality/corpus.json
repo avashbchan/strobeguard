@@ -1,0 +1,13 @@
+{
+  "_about": "Clips for scripts/grade.mjs. 'file' is a file-name prefix inside the videos folder (default test_videos/, not committed); 'iris' is an EA IRIS test video from node scripts/iris/fetch.mjs. kind: calm = the filter should change nothing; strobe = flashing that must be damped.",
+  "clips": [
+    { "name": "concert-strobe", "file": "EXCISION", "start": 223, "seconds": 12, "kind": "strobe" },
+    { "name": "concert-calm", "file": "EXCISION", "start": 100, "seconds": 6, "kind": "calm" },
+    { "name": "screen-strobe", "file": "Copy of Screen Recording", "start": 5, "seconds": 8, "kind": "strobe" },
+    { "name": "gameplay-pulse", "file": "DOGGIE", "start": 131, "seconds": 8, "kind": "strobe" },
+    { "name": "dialogue", "file": "Chicanery", "start": 120, "seconds": 6, "kind": "calm" },
+    { "name": "basketball", "file": "Could Kevin Durant", "start": 30, "seconds": 6, "kind": "calm" },
+    { "name": "iris-3hz", "iris": "3Hz_6s", "start": 0, "seconds": 6, "kind": "strobe" },
+    { "name": "iris-red-ramp", "iris": "GradualRedIncrease", "start": 0, "seconds": 1, "kind": "calm" }
+  ]
+}
