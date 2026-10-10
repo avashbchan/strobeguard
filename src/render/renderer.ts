@@ -6,6 +6,7 @@
 //   pass 1: centered temporal low-pass of luminance (4 look-ahead frames + recursive history)
 //   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
 // Where the mask is 0 (and settings are neutral) the output equals the source exactly.
+// Survives WebGL context loss: GPU objects are rebuilt on webglcontextrestored.
 
 import { BUFFER_FRAMES, CELL_COUNT, GRID_COLS, GRID_ROWS, type FilterSettings } from '../types.ts';
 import { createFrameRing } from '../buffer/frameRing.ts';
@@ -45,40 +46,30 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   if (!ctx) throw new Error('WebGL2 is not available in this browser.');
   const gl: WebGL2RenderingContext = ctx;
 
-  const ring = createFrameRing(gl, BUFFER_FRAMES);
-  const history = createLumaHistory(gl);
-  let historyValid = false;
-
-  const historyProgram = createProgram(gl, TEXTURE_VERT, HISTORY_FRAG); // renders into a texture
-  const filterProgram = createProgram(gl, FULLSCREEN_VERT, FILTER_FRAG);
-  const hu = uniforms(gl, historyProgram, [
-    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid',
-    'uFuture1', 'uFuture2', 'uFuture3', 'uFuture4',
-  ]);
-  const fu = uniforms(gl, filterProgram, [
-    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uBrightness', 'uSaturation',
-  ]);
-  // An empty VAO: the fullscreen triangle is generated from gl_VertexID.
-  const vao = gl.createVertexArray();
-
-  // 8×6 single-channel mask. Uploaded row 0 first, so row 0 sits at v = 0 = top of the screen.
-  // LINEAR filtering interpolates between cell centres, so damping fades across cell edges.
-  const maskTex = gl.createTexture();
-  const maskBytes = new Uint8Array(CELL_COUNT);
-  gl.bindTexture(gl.TEXTURE_2D, maskTex);
-  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, GRID_COLS, GRID_ROWS);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
   const debugMask = readDebugMask();
-
+  const maskBytes = new Uint8Array(CELL_COUNT);
+  let historyValid = false;
   // Capture time of the last frame shown. Playback must never step back in source time:
   // re-showing an older frame after a newer one can insert a flash that isn't in the source.
   let lastShownMs = -Infinity;
 
-  function uploadMask(mask: readonly number[]) {
+  // All GPU resources. null while the WebGL context is lost (GPU reset, driver hiccup, memory
+  // pressure); rebuilt on restore so the output recovers instead of staying black.
+  let gpu: Gpu | null = createGpu(gl);
+
+  const onContextLost = (e: Event) => {
+    e.preventDefault(); // tells the browser we will handle restoration
+    gpu = null; // its objects are already invalid; nothing to delete
+  };
+  const onContextRestored = () => {
+    gpu = createGpu(gl);
+    historyValid = false;
+    lastShownMs = -Infinity;
+  };
+  canvas.addEventListener('webglcontextlost', onContextLost);
+  canvas.addEventListener('webglcontextrestored', onContextRestored);
+
+  function uploadMask(maskTex: WebGLTexture, mask: readonly number[]) {
     for (let i = 0; i < CELL_COUNT; i++) {
       const v = mask[i] ?? 0;
       maskBytes[i] = Number.isFinite(v) ? Math.round(Math.min(1, Math.max(0, v)) * 255) : 0;
@@ -95,9 +86,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
   return {
     pushFrame(video) {
+      if (!gpu) return;
+      const { ring, history } = gpu;
       ring.push(video, performance.now());
       if (ring.width === 0) return;
-      // Match the drawing buffer to the source resolution.
+      // Match the drawing buffer to the stored (possibly downscaled) frame size.
       if (canvas.width !== ring.width || canvas.height !== ring.height) {
         canvas.width = ring.width;
         canvas.height = ring.height;
@@ -106,6 +99,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     },
 
     draw(mask, settings) {
+      if (!gpu) return;
+      const { ring, history, historyProgram, filterProgram, hu, fu, vao, maskTex } = gpu;
       gl.viewport(0, 0, canvas.width, canvas.height);
       // Displayed frame = the one captured DISPLAY_DELAY_MS ago (while the buffer is still
       // filling, the oldest available). Newer frames after it are the look-ahead.
@@ -119,7 +114,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         gl.clear(gl.COLOR_BUFFER_BIT);
         return;
       }
-      uploadMask(debugMask ?? mask);
+      uploadMask(maskTex, debugMask ?? mask);
       const minMask = settings.maxProtection ? MAX_PROTECTION_FLOOR : 0;
       gl.bindVertexArray(vao);
       bindTex(0, frame);
@@ -160,6 +155,46 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
 
     delayFrames: BUFFER_FRAMES - 1,
 
+    dispose() {
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
+      if (gpu && !gl.isContextLost()) gpu.dispose();
+      gpu = null;
+    },
+  };
+}
+
+type Gpu = ReturnType<typeof createGpu>;
+
+/** Create every GPU object the renderer needs. Called at start and after a context restore. */
+function createGpu(gl: WebGL2RenderingContext) {
+  const ring = createFrameRing(gl, BUFFER_FRAMES);
+  const history = createLumaHistory(gl);
+  const historyProgram = createProgram(gl, TEXTURE_VERT, HISTORY_FRAG); // renders into a texture
+  const filterProgram = createProgram(gl, FULLSCREEN_VERT, FILTER_FRAG);
+  const hu = uniforms(gl, historyProgram, [
+    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uHistoryValid',
+    'uFuture1', 'uFuture2', 'uFuture3', 'uFuture4',
+  ]);
+  const fu = uniforms(gl, filterProgram, [
+    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uBrightness', 'uSaturation',
+  ]);
+  // An empty VAO: the fullscreen triangle is generated from gl_VertexID.
+  const vao = gl.createVertexArray();
+
+  // 8×6 single-channel mask. Uploaded row 0 first, so row 0 sits at v = 0 = top of the screen.
+  // LINEAR filtering interpolates between cell centres, so damping fades across cell edges.
+  const maskTex = gl.createTexture();
+  if (!maskTex) throw new Error('Could not create WebGL texture.');
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.R8, GRID_COLS, GRID_ROWS);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  return {
+    ring, history, historyProgram, filterProgram, hu, fu, vao, maskTex,
     dispose() {
       ring.dispose();
       history.dispose();
