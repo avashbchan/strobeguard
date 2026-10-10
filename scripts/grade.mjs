@@ -6,8 +6,9 @@
 //   ...change the filter...
 //   node scripts/grade.mjs --compare=baseline    # grade again and show what got better or worse
 //
-// Options: --only=concert-strobe,dialogue  --max-protection  --corpus=<json>  --videos=<dir>
+// Options: --only=concert-strobe,dialogue  --max-protection  --corpus=<json>  --videos=<dir> (searched before clips/ and test_videos/)
 //          --app=<url> (default http://localhost:5173)  --save=<name>
+// Clips come from clips/ (shared via Drive, see clips/README.md) or test_videos/; missing ones are skipped.
 // Output: <tmp>/strobeguard-grade/<run>/report.md, report.json, and images/ (input | output pairs:
 // the 3 most damaged frames per clip plus 3 fixed points).
 //
@@ -22,7 +23,8 @@ import { cacheDir } from './iris/paths.mjs';
 
 const opt = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const APP = (opt('app') ?? 'http://localhost:5173').replace(/\/$/, '');
-const VIDEOS = resolve(opt('videos') ?? 'test_videos');
+// Where clips are looked up, in order: --videos, the team's shared set (clips/, see clips/README.md), test_videos/.
+const VIDEO_DIRS = [opt('videos'), 'clips', 'test_videos'].filter(Boolean).map((d) => resolve(d));
 const CORPUS = JSON.parse(readFileSync(opt('corpus') ?? new URL('./quality/corpus.json', import.meta.url), 'utf8'));
 const ONLY = opt('only')?.split(',');
 const MAX_PROTECTION = process.argv.includes('--max-protection');
@@ -35,8 +37,12 @@ const OUT = join(ROOT, RUN);
 // ---------- resolve clips ----------
 function resolveClip(c) {
   if (c.iris) return join(cacheDir(), 'videos', `${c.iris}.mp4`);
-  const hit = existsSync(VIDEOS) && readdirSync(VIDEOS).find((f) => f.startsWith(c.file));
-  return hit ? join(VIDEOS, hit) : null;
+  // 'file' is a name fragment; .mp4 only (Chrome can't decode the large HEVC .mov screen recordings).
+  for (const dir of VIDEO_DIRS) {
+    const hit = existsSync(dir) && readdirSync(dir).sort().find((f) => /.mp4$/i.test(f) && f.includes(c.file));
+    if (hit) return join(dir, hit);
+  }
+  return null;
 }
 const clips = CORPUS.clips.filter((c) => !ONLY || ONLY.includes(c.name)).map((c) => ({ ...c, path: resolveClip(c) }));
 for (const c of clips) if (!c.path || !existsSync(c.path)) console.warn(`  missing video for ${c.name} (${c.file ?? c.iris}); skipped`);

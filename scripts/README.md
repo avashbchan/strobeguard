@@ -60,7 +60,7 @@ node scripts/grade.mjs --compare=baseline     # grade again; shows per-clip delt
 ```
 
 Options: `--only=concert-strobe,dialogue`, `--max-protection`, `--corpus=<json>`, `--videos=<dir>`
-(default `test_videos/`), `--app=<url>`, `--save=<name>`. Clips are listed in `scripts/quality/corpus.json`
+(searched before `clips/`, the Drive set, and `test_videos/`), `--app=<url>`, `--save=<name>`. Clips are listed in `scripts/quality/corpus.json`
 (`calm` clips should come out unchanged; `strobe` clips must be damped). Reports and input|output
 pictures (the 3 most damaged frames per clip plus 3 fixed points) go to `<tmp>/strobeguard-grade/<run>/`.
 
