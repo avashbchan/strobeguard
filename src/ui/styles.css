@@ -1,38 +1,86 @@
-:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #121820; color: #e6edf5; }
-body { margin: 0; }
-button { font: inherit; padding: .65em 1.2em; border-radius: 8px; border: 1px solid #5676a1; background: #244c7c; color: white; cursor: pointer; }
+/* Catppuccin Mocha tokens (shadcn "Catppuccin" theme on 21st.dev). No motion-heavy effects:
+   the app's own UI must never flash, so transitions stay short and opacity/colour-only. */
+:root {
+  color-scheme: dark;
+  --bg: #181825; --card: #1e1e2e; --popover: #313244; --muted: #292c3c; --border: #313244;
+  --fg: #cdd6f4; --muted-fg: #a6adc8; --subtle-fg: #7f849c;
+  --primary: #cba6f7; --primary-fg: #11111b; --accent: #89dceb;
+  --ok: #a6e3a1; --warn: #fab387; --danger: #f38ba8; --yellow: #f9e2af;
+  --radius: .5rem;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg);
+}
+body { margin: 0; background: var(--bg); }
+h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+h1::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 10px; border-radius: 3px; background: var(--primary); vertical-align: middle; }
+h2 { font-size: 18px; margin: 28px 0 8px; }
+h3 { font-size: 13px; font-weight: 600; margin: 0 0 12px; color: var(--fg); }
+
+/* Button (shadcn default + outline) */
+button { font: inherit; font-size: 14px; font-weight: 600; padding: .6em 1.15em; border-radius: var(--radius); border: 1px solid transparent; background: var(--primary); color: var(--primary-fg); cursor: pointer; transition: background-color 150ms, opacity 150ms; }
+button:hover { background: #d7bafa; }
 button:disabled { opacity: .55; cursor: wait; }
-:focus-visible { outline: 2px solid #9bbcf5; outline-offset: 4px; }
-.warning { max-width: 640px; margin: 10vh auto; padding: 0 16px; line-height: 1.6; }
-.viewer { max-width: 1280px; margin: auto; padding: 20px 24px; }
-.viewer header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-h1 { margin: 0; }
-h3 { font-size: 14px; margin: 0 0 12px; }
-.stage { position: relative; margin-top: 20px; }
-.output { display: block; width: 100%; max-height: 65vh; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: 10px; }
-.thumb { position: absolute; right: 12px; bottom: 12px; margin: 0; background: #10151ee8; padding: 6px; border-radius: 6px; }
-.thumb canvas { display: block; width: 192px; height: 108px; }
-.thumb figcaption { font-size: 11px; color: #b3c0d0; padding-top: 4px; }
-.readout { font-size: 13px; color: #a8b6c9; font-variant-numeric: tabular-nums; }
-.disclaimer { font-size: 13px; color: #a8b6c9; padding: 10px 0; }
-.error { color: #ffc1b9; border-left: 3px solid #d79d96; padding: 12px; background: #322629; }
-.notice { color: #dfd0a0; }
-.hint { color: #a8b6c9; font-size: 14px; line-height: 1.5; }
-.graphs, .risks, .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
-.graph, .risk-meters, fieldset { margin: 0; padding: 16px; background: #1b2532; border: 1px solid #334253; border-radius: 10px; min-width: 0; }
+.viewer header button.secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+.viewer header button.secondary:hover { background: var(--muted); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+/* Warning screen: a single centred card */
+.warning { max-width: 600px; margin: 10vh auto; padding: 28px 32px; line-height: 1.6; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 2); }
+.warning h2 { color: var(--warn); }
+.warning p { color: var(--muted-fg); }
+.warning button { margin-top: 8px; }
+
+/* Viewer layout */
+.viewer { max-width: 1280px; margin: auto; padding: 20px 24px 40px; }
+.viewer header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.viewer header .hint { margin: 4px 0 0; }
+.stage { position: relative; margin-top: 16px; }
+.output { display: block; width: 100%; max-height: 65vh; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); }
+.thumb { position: absolute; right: 12px; bottom: 12px; margin: 0; background: color-mix(in srgb, var(--card) 92%, transparent); border: 1px solid var(--border); padding: 6px; border-radius: var(--radius); }
+.thumb canvas { display: block; width: 192px; height: 108px; border-radius: 4px; }
+.thumb figcaption { font-size: 11px; color: var(--muted-fg); padding-top: 4px; }
+.readout { font-size: 12px; color: var(--subtle-fg); font-variant-numeric: tabular-nums; }
+
+/* Alerts (shadcn Alert: bordered box, coloured left accent) */
+.disclaimer { display: table; font-size: 12px; color: var(--muted-fg); margin: 14px 0 4px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); }
+.error, .notice { margin: 12px 0; padding: 12px 14px; font-size: 14px; border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius); background: var(--card); }
+.error { color: var(--danger); border-left-color: var(--danger); }
+.notice { color: var(--yellow); border-left-color: var(--yellow); }
+.hint { color: var(--muted-fg); font-size: 14px; line-height: 1.5; }
+
+/* Cards */
+.graphs, .risks, .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.graph, .risk-meters, fieldset { margin: 0; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); min-width: 0; }
 .graph figcaption { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
-.graph figcaption span { color: #bac7d9; font-variant-numeric: tabular-nums; }
+.graph figcaption span { color: var(--muted-fg); font-variant-numeric: tabular-nums; }
 .graph canvas { display: block; width: 100%; height: 180px; margin-top: 8px; }
-.risk-row { display: grid; grid-template-columns: 110px 1fr 40px; align-items: center; gap: 10px; font-size: 12px; margin-top: 10px; }
-.meter { height: 8px; background: #354355; border-radius: 8px; overflow: hidden; }
-.meter span { display: block; height: 100%; background: #9bbcf5; transition: width 350ms linear; }
-.risk-row output { text-align: right; font-variant-numeric: tabular-nums; }
-legend { padding: 0 6px; font-weight: 600; }
-.controls label { display: block; font-size: 14px; margin: 10px 0 18px; }
-.controls output { float: right; color: #bac7d9; font-variant-numeric: tabular-nums; }
-input[type=range] { display: block; width: 100%; margin: 14px 0; accent-color: #9bbcf5; }
-.controls .toggle { display: flex; align-items: center; gap: 8px; }
-input[type=checkbox] { width: 18px; height: 18px; accent-color: #9bbcf5; }
-fieldset:disabled { opacity: .55; }
-@media (max-width: 800px) { .viewer { padding: 16px; } .graphs, .risks, .controls { grid-template-columns: 1fr; } .thumb canvas { width: 128px; height: 72px; } }
-@media (prefers-reduced-motion: reduce) { .meter span { transition-duration: 0s; } }
+
+/* Risk meters (shadcn Progress) */
+.risk-row { display: grid; grid-template-columns: 110px 1fr 40px; align-items: center; gap: 10px; font-size: 12px; color: var(--muted-fg); margin-top: 10px; }
+.meter { height: 8px; background: var(--muted); border-radius: 999px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width 350ms linear; }
+.risk-row:last-child .meter span { background: var(--danger); }
+.risk-row output { text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* Controls */
+fieldset legend { float: left; width: 100%; padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.controls label { display: block; font-size: 14px; margin: 10px 0 16px; clear: both; }
+.controls output { float: right; color: var(--muted-fg); font-variant-numeric: tabular-nums; }
+fieldset:disabled { opacity: .5; }
+
+/* Slider (shadcn Slider look on a native range input) */
+input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 18px; margin: 10px 0 0; background: transparent; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(var(--primary), var(--primary)) 0 / var(--fill, 50%) 100% no-repeat, var(--muted); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--fg); border: 2px solid var(--primary); }
+input[type=range]:focus-visible { outline: none; }
+input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 40%, transparent); }
+
+/* Switch (shadcn Switch look on a native checkbox) */
+.controls .toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+input[type=checkbox] { -webkit-appearance: none; appearance: none; flex: none; position: relative; width: 36px; height: 20px; margin: 0; border-radius: 999px; background: var(--popover); cursor: pointer; transition: background-color 150ms; }
+input[type=checkbox]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--fg); transition: transform 150ms; }
+input[type=checkbox]:checked { background: var(--primary); }
+input[type=checkbox]:checked::after { transform: translateX(16px); background: var(--primary-fg); }
+
+@media (max-width: 800px) { .viewer { padding: 16px; } .graphs, .risks, .controls { grid-template-columns: 1fr; } .thumb canvas { width: 128px; height: 72px; } .warning { margin: 24px 16px; padding: 22px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; } }

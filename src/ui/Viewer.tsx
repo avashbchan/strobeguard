@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { startCapture, type Capture } from '../capture/capture';
 import { createAudioChain, prepareAudioContext, releasePreparedAudioContext, type AudioChain } from '../audio/audio';
 import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from '../types';
 import { Disclaimer } from './Disclaimer';
 import { usePipeline } from './usePipeline';
 import { FlashGraph, RiskMeters } from './FlashGraph';
+
+// Drives the filled part of the styled range track (see input[type=range] in styles.css).
+const fill = (value: number, min: number, max: number) =>
+  ({ '--fill': ((value - min) / (max - min)) * 100 + '%' }) as CSSProperties;
 
 export function Viewer() {
   const [capture, setCapture] = useState<Capture | null>(null);
@@ -122,7 +126,7 @@ export function Viewer() {
     <main className="viewer">
       <header>
         <div><h1>StrobeGuard</h1><p className="hint">Stream viewing with flash risk reduction</p></div>
-        {capture ? <button onClick={stopCapture}>Stop sharing</button> :
+        {capture ? <button className="secondary" onClick={stopCapture}>Stop sharing</button> :
           <button onClick={handleStart} disabled={starting}>{starting ? 'Waiting for tab…' : 'Share a tab'}</button>}
       </header>
       <Disclaimer />
@@ -141,8 +145,8 @@ export function Viewer() {
           {!capture.hasAudio && ' · no audio shared'}
         </p>
         <section className="graphs" aria-label="Flash rate comparison">
-          <FlashGraph title="Original input" report={pipeline.input} color="#9bbcf5" />
-          <FlashGraph title="Filtered output" report={pipeline.output} color="#91d4bc" />
+          <FlashGraph title="Original input" report={pipeline.input} color="#cba6f7" />
+          <FlashGraph title="Filtered output" report={pipeline.output} color="#a6e3a1" />
         </section>
         <section className="risks">
           <RiskMeters title="Input" report={pipeline.input} />
@@ -153,21 +157,21 @@ export function Viewer() {
         <fieldset>
           <legend>Picture</legend>
           <label>Brightness <output>{Math.round(settings.brightness * 100)}%</output>
-            <input type="range" min="0.3" max="1" step="0.01" value={settings.brightness} onChange={e => setSettings(s => ({ ...s, brightness: Number(e.target.value) }))} />
+            <input type="range" min="0.3" max="1" step="0.01" style={fill(settings.brightness, 0.3, 1)} value={settings.brightness} onChange={e => setSettings(s => ({ ...s, brightness: Number(e.target.value) }))} />
           </label>
           <label>Saturation <output>{Math.round(settings.saturation * 100)}%</output>
-            <input type="range" min="0" max="1" step="0.01" value={settings.saturation} onChange={e => setSettings(s => ({ ...s, saturation: Number(e.target.value) }))} />
+            <input type="range" min="0" max="1" step="0.01" style={fill(settings.saturation, 0, 1)} value={settings.saturation} onChange={e => setSettings(s => ({ ...s, saturation: Number(e.target.value) }))} />
           </label>
-          <label className="toggle"><input type="checkbox" checked={settings.maxProtection} onChange={e => setSettings(s => ({ ...s, maxProtection: e.target.checked }))} /> Maximum protection</label>
+          <label className="toggle"><input type="checkbox" role="switch" checked={settings.maxProtection} onChange={e => setSettings(s => ({ ...s, maxProtection: e.target.checked }))} /> Maximum protection</label>
           <p className="hint">Applies stronger damping across the whole picture.</p>
         </fieldset>
         <fieldset disabled={!capture?.hasAudio || !audioRef.current}>
           <legend>Audio</legend>
           <label>Bass reduction <output>{bassDb} dB</output>
-            <input type="range" min="-24" max="0" step="1" value={bassDb} onChange={e => setBassDb(Number(e.target.value))} />
+            <input type="range" min="-24" max="0" step="1" style={fill(bassDb, -24, 0)} value={bassDb} onChange={e => setBassDb(Number(e.target.value))} />
           </label>
           <label>Volume <output>{Math.round(volume * 100)}%</output>
-            <input type="range" min="0" max="1" step="0.01" value={volume} onChange={e => setVolume(Number(e.target.value))} />
+            <input type="range" min="0" max="1" step="0.01" style={fill(volume, 0, 1)} value={volume} onChange={e => setVolume(Number(e.target.value))} />
           </label>
         </fieldset>
       </section>
