@@ -87,11 +87,14 @@ Mobile support, Safari/Firefox support, browser extension, OBS plugin, user acco
 7. Output detector + dual risk meters + raw thumbnail.
 8. Polish: sliders, max protection toggle, disclaimer, error handling (user cancels share, tab closed, no audio shared).
 
-## Current task
-[Write the milestone or bug you're working on here]
+## Parallel work (3 people, 3 branches)
+- Ownership and frozen APIs live in `team/CONTRACTS.md`. Only edit files your role owns; never edit frozen files (`src/types.ts`, this file, `.cursor/**`, `team/**`, package/config files).
+- Your current task is the role prompt you were given (`team/PROMPT-A-render.md`, `PROMPT-B-detector.md`, `PROMPT-C-ui-audio.md`). Do not write it into this file.
+- Progress notes go in your own folder's README.md, not here.
 
 ## Repo notes
 - Commands: `npm run dev` (http://localhost:5173), `npm run build` (typecheck + build), `npm run typecheck`.
 - `src/types.ts` holds the data contracts plus `GRID_COLS`/`GRID_ROWS`/`CELL_COUNT`.
 - `.cursor/rules/strobeguard.mdc` mirrors this file for Cursor — keep the two in sync.
+- Scaffold: stubs for `src/render/renderer.ts`, `src/detector/detector.ts`, `src/audio/audio.ts`, already wired in `src/ui/usePipeline.ts`. Detector tests: `node --test 'src/detector/**/*.test.ts'` (Node ≥ 22.18, no deps).
 - Milestone 1 status: done. Warning screen, tab capture, and raw source drawn into a small thumbnail canvas (the large output canvas waits for the WebGL filter so raw video is never shown big).

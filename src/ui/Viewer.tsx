@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { startCapture, type Capture } from '../capture/capture';
+import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from '../types.ts';
 import { Disclaimer } from './Disclaimer';
+import { usePipeline } from './usePipeline';
 
-// Milestone 1: the capture is drawn with Canvas 2D at thumbnail size only.
-// The large output canvas arrives with the WebGL filter (milestones 2–4), so the
-// raw stream is never shown big.
+// The large output canvas only ever shows the renderer's FILTERED frame.
+// The raw stream appears only in the small thumbnail (safety rule).
 export function Viewer() {
   const [capture, setCapture] = useState<Capture | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [settings] = useState<FilterSettings>(DEFAULT_FILTER_SETTINGS); // sliders: milestone 8
   const thumbRef = useRef<HTMLCanvasElement>(null);
+  const outputRef = useRef<HTMLCanvasElement>(null);
+
+  const pipeline = usePipeline(capture, outputRef, settings);
 
   async function handleStart() {
     setError(null);
@@ -24,7 +29,7 @@ export function Viewer() {
     }
   }
 
-  // Draw loop: copy the hidden video into the thumbnail canvas every frame.
+  // Thumbnail draw loop: copy the hidden video into the small raw-preview canvas.
   useEffect(() => {
     if (!capture) return;
     const canvas = thumbRef.current;
@@ -56,17 +61,22 @@ export function Viewer() {
         )}
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {(error ?? pipeline.error) && <p className="error">{error ?? pipeline.error}</p>}
 
       {capture ? (
         <section className="stage">
-          <div className="output-placeholder">Filtered output appears here (milestone 2+)</div>
+          <canvas ref={outputRef} className="output" />
           <figure className="thumb">
             <canvas ref={thumbRef} width={256} height={144} />
             <figcaption>
               Raw source {capture.hasAudio ? '' : '· no audio shared'}
             </figcaption>
           </figure>
+          {/* Temporary readout until the graphs land (milestone 7). */}
+          <p className="readout">
+            Input {pipeline.input?.flashesPerSec.toFixed(1) ?? '–'} flashes/s · Output{' '}
+            {pipeline.output?.flashesPerSec.toFixed(1) ?? '–'} flashes/s
+          </p>
         </section>
       ) : (
         <p className="hint">
