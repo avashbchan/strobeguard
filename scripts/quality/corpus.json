@@ -1,5 +1,5 @@
 {
-  "_about": "Clips for scripts/grade.mjs. 'file' is a fragment of an .mp4 file name, searched in clips/ (the Drive set, see clips/README.md) then test_videos/ (neither is committed); 'iris' is an EA IRIS test video from node scripts/iris/fetch.mjs. kind: calm = no flashing here, the filter should change nothing; strobe = flashing that must be damped. start/seconds were picked from a brightness-jump scan of the Drive set (see the comments below).",
+  "_about": "Clips for scripts/grade.mjs. 'file' is a fragment of an .mp4 file name, searched in clips/ (the Drive set, see clips/README.md) then test_videos/ (neither is committed); 'synthetic' is a scene drawn by src/grader/synthetic.ts (no file needed); 'iris' is an EA IRIS test video from node scripts/iris/fetch.mjs. kind: calm = no flashing here, the filter should change nothing; strobe = flashing that must be damped. start/seconds were picked from a brightness-jump scan of the Drive set (see the comments below).",
   "clips": [
     { "name": "strobe-full", "file": "4.34.51", "start": 5, "seconds": 8, "kind": "strobe", "_note": "flashes the whole 68 s" },
     { "name": "strobe-opening", "file": "4.19.02", "start": 0, "seconds": 8, "kind": "strobe", "_note": "flashes 0-7 s" },
@@ -13,6 +13,15 @@
     { "name": "calm-4", "file": "4.35.58", "start": 10, "seconds": 6, "kind": "calm" },
     { "name": "calm-salvia", "file": "salvia simulation", "start": 5, "seconds": 6, "kind": "calm" },
     { "name": "iris-3hz", "iris": "3Hz_6s", "start": 0, "seconds": 6, "kind": "strobe" },
-    { "name": "iris-red-ramp", "iris": "GradualRedIncrease", "start": 0, "seconds": 1, "kind": "calm" }
+    { "name": "iris-red-ramp", "iris": "GradualRedIncrease", "start": 0, "seconds": 1, "kind": "calm" },
+    { "name": "syn-red-full", "synthetic": "red-full", "seconds": 6, "kind": "strobe", "_note": "saturated red strobe, whole frame, 5 Hz" },
+    { "name": "syn-red-area", "synthetic": "red-area", "seconds": 6, "kind": "strobe", "_note": "red strobe over ~35% of the frame, 4 Hz" },
+    { "name": "syn-small-flash", "synthetic": "small-flash", "seconds": 6, "kind": "partial", "_note": "white strobe over exactly 6 of 48 cells (12.5%, under the 25% rule)" },
+    { "name": "syn-small-unaligned", "synthetic": "small-unaligned", "seconds": 6, "kind": "partial", "_note": "~15% straddling cell edges: the detector over-counts it as 25%+" },
+    { "name": "syn-area-30", "synthetic": "area-30", "seconds": 6, "kind": "strobe", "_note": "white strobe over ~30% (just over the 25% rule)" },
+    { "name": "syn-caution", "synthetic": "caution", "seconds": 8, "kind": "caution", "_note": "full-frame flash at 2.5 Hz (2–3 Hz band)" },
+    { "name": "syn-dark-strobe", "synthetic": "dark-strobe", "seconds": 6, "kind": "strobe", "_note": "bright strobe over a dim, detailed scene (veil test)" },
+    { "name": "syn-mixed", "synthetic": "mixed", "seconds": 6, "kind": "strobe", "_note": "calm half beside flashing lasers (collateral test)" },
+    { "name": "iris-2hz", "iris": "2Hz_6s", "start": 0, "seconds": 6, "kind": "caution" }
   ]
 }

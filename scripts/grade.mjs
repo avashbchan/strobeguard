@@ -36,6 +36,7 @@ const OUT = join(ROOT, RUN);
 
 // ---------- resolve clips ----------
 function resolveClip(c) {
+  if (c.synthetic) return 'synthetic';
   if (c.iris) return join(cacheDir(), 'videos', `${c.iris}.mp4`);
   // 'file' is a name fragment; .mp4 only (Chrome can't decode the large HEVC .mov screen recordings).
   for (const dir of VIDEO_DIRS) {
@@ -45,12 +46,14 @@ function resolveClip(c) {
   return null;
 }
 const clips = CORPUS.clips.filter((c) => !ONLY || ONLY.includes(c.name)).map((c) => ({ ...c, path: resolveClip(c) }));
-for (const c of clips) if (!c.path || !existsSync(c.path)) console.warn(`  missing video for ${c.name} (${c.file ?? c.iris}); skipped`);
-const runnable = clips.filter((c) => c.path && existsSync(c.path));
+const available = (c) => c.synthetic || (c.path && existsSync(c.path));
+for (const c of clips) if (!available(c)) console.warn(`  missing video for ${c.name} (${c.file ?? c.iris}); skipped`);
+const runnable = clips.filter(available);
 if (!runnable.length) { console.error('No clips to grade.'); process.exit(2); }
 
 // ---------- file server (Range + CORS, so Chrome can seek and read pixels) ----------
-const served = new Map(runnable.map((c, i) => [`/v/${i}${extname(c.path)}`, c.path]));
+// URLs are numbered by position in runnable (synthetic clips need no file).
+const served = new Map(runnable.map((c, i) => [`/v/${i}${extname(c.path)}`, c.path]).filter(([, path]) => path !== 'synthetic'));
 const server = http.createServer((req, res) => {
   const file = served.get(req.url ?? '');
   if (!file) { res.writeHead(404).end(); return; }
@@ -83,14 +86,15 @@ try {
     const t0 = Date.now();
     process.stdout.write(`  grading ${c.name} (${c.seconds} s) … `);
     try {
-      const r = await page.ev(`runGrade(${JSON.stringify({ url: `${base}/v/${i}${extname(c.path)}`, start: c.start, seconds: c.seconds, maxProtection: MAX_PROTECTION })})`);
+      const r = await page.ev(`runGrade(${JSON.stringify({ ...(c.synthetic ? { synthetic: c.synthetic } : { url: `${base}/v/${i}${extname(c.path)}` }), start: c.start ?? 0, seconds: c.seconds, maxProtection: MAX_PROTECTION })})`);
       const images = r.images.map((img, k) => {
         const file = `${c.name}-${k}.jpg`;
         writeFileSync(join(OUT, 'images', file), Buffer.from(img.dataUrl.split(',')[1], 'base64'));
         return { label: img.label, file };
       });
       results.push({ name: c.name, kind: c.kind, score: r.score, safe: r.safe, parts: r.parts, summary: r.summary, images, perFrame: r.perFrame });
-      console.log(`${r.score} ${r.safe ? 'safe' : 'UNSAFE'} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+      const tm = r.timing ? ` · ms/frame: ${Object.entries(r.timing).map(([k, v]) => `${k} ${v}`).join(', ')}` : '';
+      console.log(`${r.score} ${r.safe ? 'safe' : 'UNSAFE'} (${((Date.now() - t0) / 1000).toFixed(0)} s${tm})`);
     } catch (e) {
       console.log(`FAILED: ${String(e.message).split('\n')[0]}`);
       results.push({ name: c.name, kind: c.kind, error: String(e.message).split('\n')[0] });
