@@ -93,9 +93,8 @@ uniform float uBrightness;   // multiplier, 1 = unchanged
 uniform float uSaturation;   // multiplier, 1 = unchanged
 out vec4 outColor;
 
-const float CONTRAST_CUT = 0.4; // at m = 1, attenuate linear light by 40%
+const float CONTRAST_CUT = 0.4; // at m = 1, pull 40% of the way to mid-grey
 const float RED_RATIO = 0.8;    // saturated red: R/(R+G+B) >= 0.8 (same as detector)
-const float RED_TARGET_RATIO = 0.65; // retain red hue below the saturated-red boundary
 
 void main() {
   vec3 src = texture(uFrame, vUv).rgb;
@@ -103,32 +102,24 @@ void main() {
   vec3 rgb = src; // m = 0 → exactly the source texel
 
   if (m > 0.0) {
-    // Use the smoothed luminance as a ceiling: dim bright excursions without carrying
-    // a previous flash into dark pixels. Scaling current-frame linear RGB preserves its
-    // channel proportions and avoids the grey veil produced by an additive RGB offset.
+    // Temporal low-pass, luminance only: add the same linear offset to R, G and B so the
+    // pixel's luminance becomes the smoothed value while its colour differences and edges
+    // stay from the current frame (blending whole frames would ghost moving detail).
     vec3 lin = toLinear(src);
     float target = texture(uHistory, vUv).r;
-    float sourceLuma = luminance(lin);
-    float gain = clamp(target / max(sourceLuma, 1e-5), 0.0, 1.0);
-    lin *= gain;
+    lin = clamp(lin + (target - luminance(lin)), 0.0, 1.0);
     rgb = toSrgb(lin);
 
-    // Compress excessive red saturation instead of erasing all chroma. Ramp in below the
-    // threshold and ignore near-black pixels, retaining the existing gradual risk response.
+    // Saturated-red desaturation. Ramp in just below the threshold so there is no hard edge,
+    // and ignore near-black pixels where the ratio is noise.
     float sum = rgb.r + rgb.g + rgb.b;
     float redness = rgb.r / max(sum, 1e-4);
     float redW = smoothstep(RED_RATIO - 0.1, RED_RATIO, redness) * smoothstep(0.05, 0.2, sum);
     float grey = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    // For c = mix(grey, rgb, s), solve c.r / sum(c) = RED_TARGET_RATIO for s.
-    // This keeps the largest chroma compatible with the target ratio at full damping.
-    float numerator = grey * (3.0 * RED_TARGET_RATIO - 1.0);
-    float excessRed = max(0.0, rgb.r - RED_TARGET_RATIO * sum);
-    float retainedChroma = clamp(numerator / max(numerator + excessRed, 1e-4), 0.0, 1.0);
-    rgb = mix(rgb, vec3(grey), (1.0 - retainedChroma) * redW * m);
+    rgb = mix(rgb, vec3(grey), redW * m);
 
-    // Attenuate light without lifting dark stage areas toward grey. Scaling linear RGB
-    // retains channel proportions while reducing absolute luminance excursions.
-    rgb = toSrgb(toLinear(rgb) * (1.0 - CONTRAST_CUT * m));
+    // Contrast reduction toward mid-grey (perceptual space), proportional to risk.
+    rgb = mix(rgb, vec3(0.5), CONTRAST_CUT * m);
   }
 
   // Global user settings. With both at 1 these are exact no-ops.
