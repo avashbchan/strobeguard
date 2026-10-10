@@ -16,7 +16,18 @@ Milestone 2/4/5: WebGL setup and shaders (passthrough → damping → centered s
   - Dev-only `?debugMask=all|top|checker` (`debugMask.ts`), ignored in production builds.
   - Headless check (SwiftShader, synthetic frames): m = 0 max diff 0; 5 Hz full-frame black/white at m = 1 →
     output luminance swing 0.055 (source 1.0, flash threshold 0.1); top-row mask damps only the top.
-- [ ] Milestone 5: centered temporal smoothing over past + future buffered frames.
+- [x] Milestone 5: centered temporal smoothing. Pass 1 now averages linear luminance over the displayed frame
+  and the next 4 buffered (newer) frames, weights 5,4,3,2,1 (`uFuture1..4`, texture units 3–6), then blends with
+  the recursive history: `Lc = mix(L0, futureAvg, m)`, `hist = mix(Lc, hist_prev, 0.9·m)`. m = 0 is still exact.
+  Headless comparison (m = 1, luminance swing of the output; source swing 1.0):
+
+  | | M4 (past only) | M5 (centered) |
+  |---|---|---|
+  | 5 Hz b/w flash | 0.060 | 0.025 |
+  | 3 Hz b/w flash | 0.095 | 0.075 |
+  | 5 Hz red flash | 0.063 | 0.057 |
+  | hard cut: output starts moving before it is shown | 0 frames | 4 frames |
+  | hard cut: frames to reach 90% (lag / ghosting) | 25 | 17 |
 
 ## Files
 - `renderer.ts` — frozen API (`createRenderer`), wires ring buffer + shader.
