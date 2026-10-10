@@ -1,32 +1,45 @@
+import { useState } from 'react';
 import { Disclaimer } from './Disclaimer';
-import { Logo } from './Logo';
+import { Mark } from './Mark';
 
-type Props = { leaving: boolean; onAccept: () => void; onLeft: () => void };
+type Props = { onAccept: () => void };
 
-// Slides in from the right on load; on continue it slides out to the left, then App shows the
-// viewer. Under prefers-reduced-motion the CSS animations are off and App switches instantly.
-export function WarningScreen({ leaving, onAccept, onLeft }: Props) {
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// The panel slides in from the right to the centre, and out to the left on continue.
+// Movement only: no brightness change, nothing blinks.
+export function WarningScreen({ onAccept }: Props) {
+  const [leaving, setLeaving] = useState(false);
+
+  function handleContinue() {
+    if (reducedMotion()) onAccept();
+    else setLeaving(true);
+  }
+
   return (
-    <div className="warning-backdrop">
-      <main
-        className={'warning' + (leaving ? ' leaving' : '')}
+    <main className="warning-screen">
+      <section
+        className={`warning ${leaving ? 'is-leaving' : ''}`}
         aria-labelledby="warning-title"
-        onAnimationEnd={(e) => { if (leaving && e.target === e.currentTarget) onLeft(); }}
+        onAnimationEnd={(e) => { if (e.animationName === 'warning-out') onAccept(); }}
       >
-        <div className="brand"><Logo /> StrobeGuard</div>
+        <div className="brand"><Mark /> StrobeGuard</div>
         <h1 id="warning-title">This stream may contain flashing lights</h1>
-        <p>StrobeGuard detects rapid flashing and filters the stream to reduce flash risk, but it cannot catch everything.</p>
+        <p>
+          StrobeGuard detects rapid flashing and filters the stream to reduce flash risk, but it
+          cannot catch everything.
+        </p>
         <p>If you have photosensitive epilepsy, keep your usual precautions:</p>
-        <ul className="precautions">
+        <ul>
           <li>Watch in a well-lit room</li>
           <li>Sit back from the screen</li>
           <li>Stop watching if you feel unwell</li>
         </ul>
         <div className="warning-actions">
-          <button className="primary" onClick={onAccept} disabled={leaving} autoFocus>I understand, continue</button>
+          <button className="primary" onClick={handleContinue} autoFocus>I understand, continue</button>
           <Disclaimer />
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
