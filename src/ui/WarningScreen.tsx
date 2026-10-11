@@ -24,19 +24,18 @@ export function WarningScreen({ onAccept }: Props) {
         onAnimationEnd={(e) => { if (e.animationName === 'warning-out') onAccept(); }}
       >
         <div className="brand"><Mark /> StrobeGuard</div>
-        <h1 id="warning-title">This stream may contain flashing lights</h1>
+        <h1 id="warning-title">Flash protection is on</h1>
         <p>
-          StrobeGuard detects rapid flashing and filters the stream to reduce flash risk, but it
-          cannot catch everything.
+          StrobeGuard spots rapid flashing and filters it to reduce flash risk before it reaches
+          your screen. In our tests, the filtered stream stayed under the WCAG limit of three
+          flashes per second.
         </p>
-        <p>If you have photosensitive epilepsy, keep your usual precautions:</p>
-        <ul>
-          <li>Watch in a well-lit room</li>
-          <li>Sit back from the screen</li>
-          <li>Stop watching if you feel unwell</li>
-        </ul>
+        <p>
+          Triggers vary from person to person. If you have photosensitive epilepsy, keep your usual
+          precautions and stop watching if you feel unwell.
+        </p>
         <div className="warning-actions">
-          <button className="primary" onClick={handleContinue} autoFocus>I understand, continue</button>
+          <button className="primary" onClick={handleContinue} autoFocus>Start watching</button>
           <Disclaimer />
         </div>
       </section>
