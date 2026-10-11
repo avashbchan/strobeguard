@@ -35,6 +35,10 @@ uniform sampler2D uFrame;    // displayed (oldest buffered) frame, sRGB
 uniform sampler2D uMask;     // 8x6 damping mask, LINEAR filtered so damping fades across cell edges
 uniform float uMinMask;      // maxProtection floor (0 = off)
 
+// Most a dark region is brightened by scaling (bright pixels get less: headroom). The gain is stored in the
+// field divided by this, so it fits in 0..1 even if the GPU falls back to 8-bit render targets.
+const float GAIN_MAX = 4.0;
+
 vec3 toLinear(vec3 c) {
   return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
 }
@@ -57,7 +61,7 @@ float maskAt(vec2 uv) {
 //   target 0 rgb = low-passed colour of the region (cube root of linear light, the lightness scale of
 //                  OKLab: a rare flash barely moves the average, so dark scenes stay dark instead of
 //                  getting a veil)
-//   target 1 r   = the gain that brings the region's current mean luminance to the smoothed one
+//   target 1 r   = the gain that brings the region's current mean luminance to the smoothed one (÷ GAIN_MAX)
 //            g   = the share of the smoothed luminance a gain alone cannot deliver (filled in pass 2)
 //   Both are worked out here, where the frame's pixels are being averaged anyway, so the fill covers
 //   exactly the light the gain fails to deliver, including pixels too bright to be scaled up.
@@ -80,7 +84,6 @@ layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outGain;
 
 const float K_TEMPORAL = 0.82;
-const float GAIN_MAX = 4.0; // most a dark region is brightened by scaling; bright pixels get less (headroom)
 const int TAPS = 16; // TAPS × TAPS bilinear taps cover one field texel's footprint
 
 // Mean LINEAR colour of a frame over the screen region this field texel covers.
@@ -135,7 +138,7 @@ void main() {
   float gain = min(smoothY / currentY, GAIN_MAX);
   float achieved = achievedLuminance(uFrame, gain);
   float fillShare = max(smoothY - achieved, 0.0) / max(smoothY, 1e-5);
-  outGain = vec4(gain, fillShare, 0.0, 1.0);
+  outGain = vec4(gain / GAIN_MAX, fillShare, 0.0, 1.0);
 }
 `;
 
@@ -167,14 +170,14 @@ void main() {
     vec3 field = texture(uHistory, vUv).rgb;
     vec3 avg = field * field * field;             // smoothed colour of this region, linear
     float smoothY = luminance(avg);
-    vec2 correction = texture(uGain, vUv).rg;     // gain, share of the smoothed light still to fill
+    vec2 correction = texture(uGain, vUv).rg;     // gain / GAIN_MAX, share of the smoothed light still to fill
     vec3 lin = toLinear(src);
 
     // A pixel is never scaled past full brightness: bright content that stays bright while the rest
     // of the region flashes would clip, losing exactly the light the gain was meant to move. Pass 1
     // measured what that costs the region and set the fill to make it up.
     float headroom = 1.0 / max(max(lin.r, max(lin.g, lin.b)), 1e-3);
-    lin = lin * min(correction.x, headroom) + avg * correction.y;
+    lin = lin * min(correction.x * GAIN_MAX, headroom) + avg * correction.y;
 
     // Red (or red-to-other) colour flicker: take the smoothed hue, keep the pixel's own brightness.
     float w = m * max(redness(lin), redness(avg));
