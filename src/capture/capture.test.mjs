@@ -11,6 +11,9 @@ test('capture cleans up on playback failure, external end, and repeated stop', a
     readyState = 'live';
     stopped = 0;
     stop() { this.readyState = 'ended'; this.stopped++; }
+    // startCapture reads the track settings and re-applies constraints (audio fix #28).
+    getSettings() { return {}; }
+    async applyConstraints() {}
   }
   const makeStream = () => {
     const video = new Track(), audio = new Track();
