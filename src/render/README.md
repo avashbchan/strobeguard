@@ -61,3 +61,16 @@ Milestone 2/4/5: WebGL setup and shaders (passthrough → damping → centered s
   (`preventDefault` so the browser restores the context) and `pushFrame`/`draw` become no-ops; on
   `webglcontextrestored` it rebuilds them and resets history. Tested with `WEBGL_lose_context` in headed
   (GPU) and headless Chrome: no throws while lost, correct damping and exact passthrough after restore.
+
+## Trails and lag (filter-trails)
+- Cause (measured with `scripts/grade.mjs` trail / lag, ablations in the PR): the earlier filter smoothed every pixel
+  over ~5 frames of memory, so it could not tell motion from flicker. A bright object leaving a pixel left its
+  brightness behind (glow trail) and the object's new position was dimmed until the average caught up (lag).
+- Now the smoothing runs on a coarse field (`FIELD_COLS × FIELD_ROWS` = 8×6, the detector's own cell grid) and its
+  result is applied as a smooth gain plus a smooth fill, so detail is the current frame's. Gain is capped at 4× and
+  never scales a pixel past full brightness; pass 1 measures the light that costs and the fill makes it up exactly.
+- Finer fields (20×12 up to 80×45) trailed more; coarser than the detector cells loses locality.
+- Results on 22 shared scenarios: mean score 90.3 → 92.3, all safe; trail 0.62 → 0.09 and lag 44% → 1% on the
+  heaviest strobe clip. E2E 8/8.
+- Known cost: dark scenes under a strobe come out hazier (syn-dark-strobe 76.5 → 70.1). A gain cap of 8 recovers it
+  but narrows the safety margin on a bright-element scene (output peak 2 → 3 flashes/s).

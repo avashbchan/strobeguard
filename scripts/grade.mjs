@@ -114,13 +114,13 @@ const lines = [
   '',
   `**Overall quality ${f(overall, 1)} / 100** · safety: ${ok.every((r) => r.safe) ? 'all clips safe' : 'UNSAFE on ' + ok.filter((r) => !r.safe).map((r) => r.name).join(', ')}`,
   '',
-  '| Clip | Kind | Score | Safe | Collateral ΔE | Chroma kept | Greyed | Hue shift ° | Light | Black lift | Edges | Ghost | SSIM | Out max /s | Out >3/s (s) |',
-  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+  '| Clip | Kind | Score | Safe | Collateral ΔE | Chroma kept | Greyed | Hue shift ° | Light | Black lift | Edges | Ghost | Trail | Lag | SSIM | Out max /s | Out >3/s (s) |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
 ];
 for (const r of results) {
   if (r.error) { lines.push(`| ${r.name} | ${r.kind} | error: ${r.error} |`); continue; }
   const s = r.summary, a = s.all;
-  lines.push(`| ${r.name} | ${r.kind} | **${f(r.score, 1)}** | ${r.safe ? 'yes' : '**NO**'} | ${s.untouched.frames ? f(s.untouched.dE) : '–'} | ${f(a.chromaRatio * 100, 0)}% | ${f(a.greyed * 100, 1)}% | ${f(a.hueShift, 1)} | ${f(a.lightRatio)} | ${f(a.blackLift, 3)} | ${f(a.edgeRatio)} | ${f(a.ghost, 3)} | ${f(s.ssim, 3)} | ${f(s.safety.outRateMax, 1)} | ${f(s.safety.outOver3Seconds, 1)} |`);
+  lines.push(`| ${r.name} | ${r.kind} | **${f(r.score, 1)}** | ${r.safe ? 'yes' : '**NO**'} | ${s.untouched.frames ? f(s.untouched.dE) : '–'} | ${f(a.chromaRatio * 100, 0)}% | ${f(a.greyed * 100, 1)}% | ${f(a.hueShift, 1)} | ${f(a.lightRatio)} | ${f(a.blackLift, 3)} | ${f(a.edgeRatio)} | ${f(a.ghost, 3)} | ${f(s.trails.trail, 3)} | ${f(s.trails.lag * 100, 0)}% | ${f(s.ssim, 3)} | ${f(s.safety.outRateMax, 1)} | ${f(s.safety.outOver3Seconds, 1)} |`);
 }
 lines.push('', 'Score parts (0–1): collateral 25, colour 20, hue 10, structure 20, clarity 15, tone 10.', '');
 for (const r of ok) lines.push(`- **${r.name}**: ` + Object.entries(r.parts).map(([k, v]) => `${k} ${f(v)}`).join(' · '));

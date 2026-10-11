@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { frameQuality, maskField, scoreClip, summarize, type ClipFrame } from './metrics.ts';
+import { frameQuality, maskField, scoreClip, summarize, trailStats, type ClipFrame } from './metrics.ts';
 import { CELL_COUNT } from '../types.ts';
 
 const W = 64;
@@ -111,4 +111,60 @@ test('safety gate fails when the output keeps flashing', () => {
   const q = frameQuality(p, p, W, H, NONE);
   const frames: ClipFrame[] = Array.from({ length: 60 }, () => ({ quality: q, inRate: 5, outRate: 5, outRed: 0 }));
   assert.equal(scoreClip(summarize(frames, 30)).safe, false);
+});
+
+// ---------- trail and lag ----------
+
+const TW = 64;
+const TH = 32;
+/** A frame with a bright 12×12 box at x on a textured dark background (texture so blocks have structure). */
+function boxFrame(x: number): Uint8ClampedArray {
+  const px = new Uint8ClampedArray(TW * TH * 4);
+  for (let y = 0; y < TH; y++) for (let xx = 0; xx < TW; xx++) {
+    const i = (y * TW + xx) * 4;
+    const bg = 30 + ((xx * 7 + y * 13) % 24);
+    const inBox = xx >= x && xx < x + 12 && y >= 10 && y < 22;
+    const v = inBox ? 230 - ((xx + y) % 3) * 20 : bg;
+    px[i] = v; px[i + 1] = v * 0.8; px[i + 2] = v * 0.6; px[i + 3] = 255;
+  }
+  return px;
+}
+const mix = (a: Uint8ClampedArray, b: Uint8ClampedArray, t: number) => a.map((v, i) => (i % 4 === 3 ? 255 : v * (1 - t) + b[i]! * t));
+const toLin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const toSrgb8 = (l: number) => 255 * (l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055);
+/** Gain in linear light, like a filter that scales light (the reference behaviour). */
+const gain = (a: Uint8ClampedArray, g: number) => a.map((v, i) => (i % 4 === 3 ? 255 : toSrgb8(g * toLin(v))));
+/** Gain plus a small neutral offset, in linear light. */
+const gainOffset = (a: Uint8ClampedArray, g: number, off: number) => a.map((v, i) => (i % 4 === 3 ? 255 : toSrgb8(g * toLin(v) + off)));
+
+test('trail: a pure gain (a flash filter that only dims) leaves no trail; neither does a gain plus offset', () => {
+  const cur = boxFrame(30), prev = [boxFrame(26), boxFrame(22)];
+  const dim = trailStats(cur, gain(cur, 0.5), TW, TH, FULL, prev);
+  assert.ok(dim.blocks > 0 && dim.trail < 0.05, `trail ${dim.trail}`);
+  const veiled = trailStats(cur, gainOffset(cur, 0.6, 0.04), TW, TH, FULL, prev);
+  assert.ok(veiled.trail < 0.05, `veiled ${veiled.trail}`);
+  assert.ok(dim.lag < 0.1);
+});
+
+test('trail: blending in the previous frame (a smeared object) shows up as a trail', () => {
+  const cur = boxFrame(30), p1 = boxFrame(24);
+  const smeared = trailStats(cur, gain(mix(cur, p1, 0.5), 0.7), TW, TH, FULL, [p1, boxFrame(18)]);
+  const clean = trailStats(cur, gain(cur, 0.7), TW, TH, FULL, [p1, boxFrame(18)]);
+  assert.ok(smeared.trail > 0.05 && smeared.trail > 5 * clean.trail, `smeared ${smeared.trail} clean ${clean.trail}`);
+});
+
+test('lag: an output that is a delayed copy of the input is explained by the earlier frame', () => {
+  const prev = [boxFrame(26), boxFrame(22), boxFrame(18)];
+  const lagging = trailStats(boxFrame(30), gain(prev[1]!, 0.6), TW, TH, FULL, prev); // output shows the frame two steps back
+  assert.ok(lagging.motionBlocks > 0 && lagging.lag > 0.8, `lag ${lagging.lag}`);
+  const onTime = trailStats(boxFrame(30), gain(boxFrame(30), 0.6), TW, TH, FULL, prev);
+  assert.ok(onTime.lag < 0.1, `on time ${onTime.lag}`);
+});
+
+test('trail only counts the filtered area', () => {
+  const cur = boxFrame(30), p1 = boxFrame(24);
+  const smeared = mix(cur, p1, 0.5);
+  const untouched = trailStats(cur, smeared, TW, TH, NONE, [p1]);
+  assert.equal(untouched.blocks, 0);
+  assert.equal(untouched.trail, 0);
 });
