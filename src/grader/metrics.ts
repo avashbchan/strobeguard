@@ -16,6 +16,11 @@
 //   edgeRatio     edge energy out / in (blur → < 1)
 //   ghost         edge energy present in the output but not the input, / input edges (trails, smears)
 //   ssim          structural similarity of lightness, 8×8 blocks (1 = identical structure)
+//   trail         structure in the output that the current input doesn't explain: per 8×8 block of the filtered
+//                 area, the output is fitted to the current input with the best gain and offset (what a flash
+//                 filter should do); the leftover, relative to the output's own contrast, is a trail (0 = none)
+//   lag           of the blocks where the input is moving, the share whose output is better explained by an
+//                 EARLIER input frame than the current one (the output is running behind the picture)
 
 import { GRID_COLS, GRID_ROWS } from '../types.ts';
 
@@ -79,7 +84,8 @@ export type RegionStats = {
   edgeRatio: number;
   ghost: number;
 };
-export type FrameQuality = { all: RegionStats; untouched: RegionStats; filtered: RegionStats; ssim: number };
+export type TrailStats = { trail: number; lag: number; blocks: number; motionBlocks: number };
+export type FrameQuality = { all: RegionStats; untouched: RegionStats; filtered: RegionStats; ssim: number; trails: TrailStats };
 
 export const UNTOUCHED_BELOW = 0.02;
 export const FILTERED_FROM = 0.3;
@@ -143,8 +149,75 @@ export function ssim(Lin: Float32Array, Lout: Float32Array, w: number, h: number
   return blocks ? sum / blocks : 1;
 }
 
-/** Compare one output frame with the input frame it displays. `mask` = the 48 damping values used. */
-export function frameQuality(input: ArrayLike<number>, output: ArrayLike<number>, w: number, h: number, mask: readonly number[]): FrameQuality {
+const BLOCK = 8;
+const MOTION_RMS = 0.02; // linear-luminance change between consecutive input frames that counts as moving
+const LAG_GAIN = 0.8; // an earlier frame must leave under 80% of the current frame's residual to win
+/** Linear-luminance structure below this RMS is invisible (and is mostly 8-bit rounding), so it adds no weight. */
+const NOISE_RMS = 0.01;
+const NOISE_ENERGY = BLOCK * BLOCK * NOISE_RMS * NOISE_RMS;
+
+const lumaCache = new WeakMap<object, Float32Array>(); // earlier frames are passed again on later calls
+
+/** Linear luminance (0–1) of an RGBA frame (cached per frame object). */
+function linearLuma(rgba: ArrayLike<number>, pixels: number): Float32Array {
+  const hit = lumaCache.get(rgba);
+  if (hit && hit.length === pixels) return hit;
+  const y = new Float32Array(pixels);
+  lumaCache.set(rgba, y);
+  for (let i = 0; i < pixels; i++) y[i] = 0.2126 * LINEAR[rgba[i * 4] ?? 0]! + 0.7152 * LINEAR[rgba[i * 4 + 1] ?? 0]! + 0.0722 * LINEAR[rgba[i * 4 + 2] ?? 0]!;
+  return y;
+}
+
+/** Residual energy (sum of squares) of fitting o ≈ a·x + b over one block, and the block's total output energy. */
+function affineResidual(o: Float32Array, x: Float32Array, w: number, bx: number, by: number): { res: number; energy: number } {
+  const n = BLOCK * BLOCK;
+  let mo = 0, mx = 0;
+  for (let y = by; y < by + BLOCK; y++) for (let xx = bx; xx < bx + BLOCK; xx++) { mo += o[y * w + xx]!; mx += x[y * w + xx]!; }
+  mo /= n; mx /= n;
+  let vxx = 0, vxo = 0, voo = 0;
+  for (let y = by; y < by + BLOCK; y++) for (let xx = bx; xx < bx + BLOCK; xx++) {
+    const dx = x[y * w + xx]! - mx, d = o[y * w + xx]! - mo;
+    vxx += dx * dx; vxo += dx * d; voo += d * d;
+  }
+  const a = vxx > 1e-9 ? vxo / vxx : 0;
+  return { res: Math.max(0, voo - a * vxo), energy: voo };
+}
+
+/**
+ * Trail and lag (see the header). `prev` = earlier input frames, newest first (prev[0] is one frame back).
+ * Only blocks mostly inside the filtered area (mask ≥ FILTERED_FROM) count.
+ */
+export function trailStats(input: ArrayLike<number>, output: ArrayLike<number>, w: number, h: number, mask: readonly number[], prev: ArrayLike<number>[] = []): TrailStats {
+  const px = w * h;
+  const C = linearLuma(input, px), O = linearLuma(output, px);
+  const P = prev.map((p) => linearLuma(p, px));
+  const m = maskField(mask, w, h);
+  let blocks = 0, motionBlocks = 0, trailSum = 0, lagged = 0;
+  for (let by = 0; by + BLOCK <= h; by += BLOCK) {
+    for (let bx = 0; bx + BLOCK <= w; bx += BLOCK) {
+      let mm = 0;
+      for (let y = by; y < by + BLOCK; y++) for (let x = bx; x < bx + BLOCK; x++) mm += m[y * w + x]!;
+      if (mm / (BLOCK * BLOCK) < FILTERED_FROM) continue;
+      const cur = affineResidual(O, C, w, bx, by);
+      if (cur.energy < NOISE_ENERGY) continue; // a flat output block has no structure to explain
+      blocks++;
+      trailSum += Math.sqrt(Math.max(0, cur.res - NOISE_ENERGY * 0.5) / cur.energy);
+      const p1 = P[0];
+      if (!p1) continue;
+      let moved = 0;
+      for (let y = by; y < by + BLOCK; y++) for (let x = bx; x < bx + BLOCK; x++) { const d = C[y * w + x]! - p1[y * w + x]!; moved += d * d; }
+      if (Math.sqrt(moved / (BLOCK * BLOCK)) < MOTION_RMS) continue;
+      motionBlocks++;
+      let best = cur.res;
+      for (const p of P) best = Math.min(best, affineResidual(O, p, w, bx, by).res);
+      if (best < LAG_GAIN * cur.res && cur.res > NOISE_ENERGY) lagged++;
+    }
+  }
+  return { trail: blocks ? trailSum / blocks : 0, lag: motionBlocks ? lagged / motionBlocks : 0, blocks, motionBlocks };
+}
+
+/** Compare one output frame with the input frame it displays. `mask` = the 48 damping values used; `prev` = earlier input frames, newest first. */
+export function frameQuality(input: ArrayLike<number>, output: ArrayLike<number>, w: number, h: number, mask: readonly number[], prev: ArrayLike<number>[] = []): FrameQuality {
   const px = w * h;
   const A = toOklab(input, px);
   const B = toOklab(output, px);
@@ -185,7 +258,7 @@ export function frameQuality(input: ArrayLike<number>, output: ArrayLike<number>
       }
     }
   }
-  return { all: finish(all, px), untouched: finish(untouched, px), filtered: finish(filtered, px), ssim: ssim(A.L, B.L, w, h) };
+  return { all: finish(all, px), untouched: finish(untouched, px), filtered: finish(filtered, px), ssim: ssim(A.L, B.L, w, h), trails: trailStats(input, output, w, h, mask, prev) };
 }
 
 // ---------- Clip summary and score ----------
@@ -195,6 +268,8 @@ type Avg = Omit<RegionStats, 'share'> & { share: number; frames: number };
 export type ClipSummary = {
   frames: number;
   all: Avg; untouched: Avg; filtered: Avg; ssim: number;
+  /** Mean trail and lag over frames that had filtered blocks (moving blocks for lag); see trailStats. */
+  trails: { trail: number; lag: number; frames: number };
   safety: { inRateMax: number; outRateMax: number; outOver3Seconds: number; outRedMax: number; inOver3Seconds: number };
 };
 
@@ -212,6 +287,15 @@ export function summarize(frames: ClipFrame[], fps: number): ClipSummary {
     frames: frames.length,
     all: avg('all'), untouched: avg('untouched'), filtered: avg('filtered'),
     ssim: frames.length ? frames.reduce((s, f) => s + f.quality.ssim, 0) / frames.length : 1,
+    trails: (() => {
+      const t = frames.filter((f) => f.quality.trails.blocks > 0);
+      const l = frames.filter((f) => f.quality.trails.motionBlocks > 0);
+      return {
+        trail: t.length ? t.reduce((a, f) => a + f.quality.trails.trail, 0) / t.length : 0,
+        lag: l.length ? l.reduce((a, f) => a + f.quality.trails.lag, 0) / l.length : 0,
+        frames: t.length,
+      };
+    })(),
     safety: {
       inRateMax: Math.max(0, ...frames.map((f) => f.inRate)),
       outRateMax: Math.max(0, ...frames.map((f) => f.outRate)),

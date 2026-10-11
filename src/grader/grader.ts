@@ -159,6 +159,7 @@ async function runGrade({ url, synthetic, start, seconds, fps = 30, maxProtectio
   const worst: { badness: number; sample: Sample }[] = [];
   const samples: Sample[] = [];
   let mask: readonly number[] = EMPTY_MASK;
+  const refHistory: ImageData[] = []; // earlier reference frames at metric resolution, newest first (trail / lag)
 
   const total = Math.max(0, Math.floor(Math.min(seconds, source.duration - start) * fps));
   const sampleAt = new Set([Math.floor(total * 0.25), Math.floor(total * 0.5), Math.floor(total * 0.75)]);
@@ -194,7 +195,9 @@ async function runGrade({ url, synthetic, start, seconds, fps = 30, maxProtectio
     if (i < delay) continue; // buffer still filling
     const input = drawFit(inCtx, refCanvas, refCanvas.width, refCanvas.height);
     lap('readback');
-    const quality = frameQuality(input.data, out.data, MW, MH, used);
+    const quality = frameQuality(input.data, out.data, MW, MH, used, refHistory.map((r) => r.data));
+    refHistory.unshift(input);
+    refHistory.length = Math.min(refHistory.length, 4);
     lap('metrics');
     const f: ClipFrame = { quality, inRate: inRates[(i - delay) % BUFFER_FRAMES]!, outRate: outReport?.flashesPerSec ?? 0, outRed: outReport?.redRisk ?? 0 };
     frames.push(f);

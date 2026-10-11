@@ -2,9 +2,13 @@
 // Displays the frame captured a fixed 467 ms ago (14 frames at 30 fps) from a 15-frame ring
 // buffer (the look-ahead for the detector), chosen by capture time so uneven ticks and stalls
 // never speed up or reverse playback,
-// filtered per pixel by the 8×6 damping mask (milestones 4–5):
-//   pass 1: centered temporal low-pass of luminance (4 look-ahead frames + recursive history)
-//   pass 2: apply it + red desaturation + contrast reduction + user settings → canvas
+// filtered by the 8×6 damping mask (milestones 4–5), through a coarse brightness FIELD, not per pixel:
+//   pass 1: per screen region (FIELD_COLS × FIELD_ROWS texels, aligned with the mask grid) the colour is
+//           low-passed over time (4 look-ahead frames + recursive history), and the gain and fill that
+//           bring the region's current brightness to the smoothed one are worked out
+//   pass 2: every pixel is multiplied by the smooth gain and gets the smooth fill added; red regions take
+//           the smoothed hue; user settings → canvas
+// Pixel detail always comes from the current frame, so moving content does not trail behind.
 // Where the mask is 0 (and settings are neutral) the output equals the source exactly.
 // Survives WebGL context loss: GPU objects are rebuilt on webglcontextrestored.
 
@@ -36,6 +40,14 @@ const FUTURE_UNIFORMS = ['uFuture1', 'uFuture2', 'uFuture3', 'uFuture4'] as cons
  */
 const NOMINAL_FPS = 30;
 const DISPLAY_DELAY_MS = ((BUFFER_FRAMES - 1) * 1000) / NOMINAL_FPS;
+
+/**
+ * Resolution of the smoothing field (pass 1). Each texel covers 1/40 × 1/24 of the screen, a few times
+ * finer than the 8×6 damping mask. Smoothing this coarse field, not every pixel, is what stops moving
+ * content from trailing; see HISTORY_FRAG.
+ */
+const FIELD_COLS = 8;
+const FIELD_ROWS = 6;
 
 /** maxProtection: every cell gets at least this much damping. */
 const MAX_PROTECTION_FLOOR = 0.8;
@@ -95,7 +107,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         canvas.width = ring.width;
         canvas.height = ring.height;
       }
-      if (history.resize(ring.width, ring.height)) historyValid = false;
+      if (history.resize(FIELD_COLS, FIELD_ROWS)) historyValid = false;
     },
 
     draw(mask, settings) {
@@ -120,7 +132,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       bindTex(0, frame);
       bindTex(1, maskTex);
 
-      // Pass 1: centered low-passed luminance → history[write].
+      // Pass 1: centered low-passed colour of each screen region → field[write] (small viewport).
+      gl.viewport(0, 0, FIELD_COLS, FIELD_ROWS);
       gl.bindFramebuffer(gl.FRAMEBUFFER, history.writeFbo);
       gl.useProgram(historyProgram);
       bindTex(2, history.read);
@@ -138,9 +151,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       // Pass 2: filtered frame → canvas.
+      gl.viewport(0, 0, canvas.width, canvas.height);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.useProgram(filterProgram);
       bindTex(2, history.written);
+      bindTex(3, history.writtenGain);
+      gl.uniform1i(fu.uGain, 3);
       gl.uniform1i(fu.uFrame, 0);
       gl.uniform1i(fu.uMask, 1);
       gl.uniform1i(fu.uHistory, 2);
@@ -177,7 +193,7 @@ function createGpu(gl: WebGL2RenderingContext) {
     'uFuture1', 'uFuture2', 'uFuture3', 'uFuture4',
   ]);
   const fu = uniforms(gl, filterProgram, [
-    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uBrightness', 'uSaturation',
+    'uFrame', 'uMask', 'uMinMask', 'uHistory', 'uGain', 'uBrightness', 'uSaturation',
   ]);
   // An empty VAO: the fullscreen triangle is generated from gl_VertexID.
   const vao = gl.createVertexArray();

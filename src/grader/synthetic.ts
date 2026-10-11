@@ -12,8 +12,9 @@
 //   caution      full-frame white flash at 2.5 Hz                       → the 2–3 Hz caution band
 //   dark-strobe  dim, detailed scene with a bright 5 Hz strobe          → grey veil / haze on dark content
 //   mixed        calm half + flashing coloured lasers half, 6 Hz        → collateral beside a strobe
+//   motion-strobe  fast bright and dark boxes crossing a full-frame 5 Hz strobe → trails / lag behind moving objects
 
-export const SYNTHETIC_SCENES = ['red-full', 'red-area', 'small-flash', 'small-unaligned', 'area-30', 'caution', 'dark-strobe', 'mixed'] as const;
+export const SYNTHETIC_SCENES = ['red-full', 'red-area', 'small-flash', 'small-unaligned', 'area-30', 'caution', 'dark-strobe', 'mixed', 'motion-strobe'] as const;
 export type SyntheticScene = (typeof SYNTHETIC_SCENES)[number];
 
 export const SYN_W = 1280;
@@ -118,6 +119,26 @@ export function drawScene(ctx: CanvasRenderingContext2D, name: SyntheticScene, t
         ctx.restore();
         flash(ctx, '#ffffff', 0.35, SYN_W / 2, 0, SYN_W / 2, SYN_H);
       }
+      break;
+    }
+    case 'motion-strobe': {
+      base(ctx, t, false);
+      // A bright magenta box crossing left → right (≈ 600 px/s, 20 px per frame) and a dark box with a
+      // light outline crossing right → left, both with fine detail, under a full-frame 5 Hz strobe. A
+      // temporal filter that smears moving content leaves a faint copy of each box behind it.
+      const span = SYN_W + 300;
+      const x1 = ((t * 600) % span) - 150;
+      const x2 = SYN_W + 150 - ((t * 450) % span);
+      ctx.fillStyle = '#ff2fd0';
+      ctx.fillRect(x1, SYN_H * 0.25, 150, 150);
+      ctx.fillStyle = '#ffffff';
+      for (let k = 0; k < 6; k++) ctx.fillRect(x1 + 10 + k * 24, SYN_H * 0.25 + 12, 10, 126);
+      ctx.fillStyle = '#05061a';
+      ctx.fillRect(x2, SYN_H * 0.6, 170, 130);
+      ctx.strokeStyle = '#a5f3fc';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(x2 + 3, SYN_H * 0.6 + 3, 164, 124);
+      if (on(t, 5)) flash(ctx, '#ffffff', 0.75);
       break;
     }
   }

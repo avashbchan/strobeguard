@@ -22,6 +22,7 @@
     { "name": "syn-caution", "synthetic": "caution", "seconds": 8, "kind": "caution", "_note": "full-frame flash at 2.5 Hz (2–3 Hz band)" },
     { "name": "syn-dark-strobe", "synthetic": "dark-strobe", "seconds": 6, "kind": "strobe", "_note": "bright strobe over a dim, detailed scene (veil test)" },
     { "name": "syn-mixed", "synthetic": "mixed", "seconds": 6, "kind": "strobe", "_note": "calm half beside flashing lasers (collateral test)" },
+    { "name": "syn-motion", "synthetic": "motion-strobe", "seconds": 6, "kind": "strobe", "_note": "fast bright and dark boxes under a 5 Hz strobe (trail / lag test)" },
     { "name": "iris-2hz", "iris": "2Hz_6s", "start": 0, "seconds": 6, "kind": "caution" }
   ]
 }
