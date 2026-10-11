@@ -1,0 +1,13 @@
+{
+  "name": "StrobeGuard",
+  "short_name": "StrobeGuard",
+  "description": "Reduces flash risk in livestreams. Not a medical device.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080B10",
+  "theme_color": "#080B10",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
