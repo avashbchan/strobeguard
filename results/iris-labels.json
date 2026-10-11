@@ -1,0 +1,266 @@
+{
+  "source": "EA IRIS 1.1.0 (IrisApp, full settings)",
+  "labelRule": "flash failure (grade 3, luminance or red), gaps < 0.5 s merged",
+  "clips": [
+    {
+      "id": "175331-(1)",
+      "file": "Screen Recording 2026-10-10 175331 (1).mp4",
+      "fps": 30,
+      "seconds": 31.233,
+      "irisFailSeconds": 30.633,
+      "irisRedFailSeconds": 17.333,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [
+        [
+          0.6,
+          31.233
+        ]
+      ],
+      "category": "dangerous: concert strobe (lasers)"
+    },
+    {
+      "id": "4.18.03-PM",
+      "file": "Screen Recording 2026-10-10 at 4.18.03ΓÇ»PM.mp4",
+      "fps": 30.001,
+      "seconds": 31.899,
+      "irisFailSeconds": 1.267,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [
+        [
+          10.666,
+          11.933
+        ]
+      ],
+      "category": "dangerous: concert strobe (short)"
+    },
+    {
+      "id": "4.19.02-AM",
+      "file": "Screen Recording 2026-10-10 at 4.19.02ΓÇ»AM.mp4",
+      "fps": 30,
+      "seconds": 55.899,
+      "irisFailSeconds": 10.367,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 1.967,
+      "irisPatternSeconds": 0,
+      "labels": [
+        [
+          4.133,
+          4.333
+        ],
+        [
+          21.433,
+          22.7
+        ],
+        [
+          23.833,
+          24.733
+        ],
+        [
+          30.866,
+          31.4
+        ],
+        [
+          36.566,
+          37.233
+        ],
+        [
+          39.6,
+          40.033
+        ],
+        [
+          47.233,
+          52.933
+        ],
+        [
+          53.699,
+          55.899
+        ]
+      ],
+      "category": "dangerous: concert strobe"
+    },
+    {
+      "id": "4.19.52-PM",
+      "file": "Screen Recording 2026-10-10 at 4.19.52ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 52.266,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: stage performance"
+    },
+    {
+      "id": "4.22.11-PM",
+      "file": "Screen Recording 2026-10-10 at 4.22.11ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 44.266,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: fast cuts (film)"
+    },
+    {
+      "id": "4.23.11-AM",
+      "file": "Screen Recording 2026-10-10 at 4.23.11ΓÇ»AM.mp4",
+      "fps": 30,
+      "seconds": 42.399,
+      "irisFailSeconds": 22.266,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [
+        [
+          3.767,
+          4.933
+        ],
+        [
+          6.533,
+          7.933
+        ],
+        [
+          9.7,
+          16.833
+        ],
+        [
+          17.733,
+          21.533
+        ],
+        [
+          27.733,
+          28.833
+        ],
+        [
+          30.9,
+          41.333
+        ]
+      ],
+      "category": "dangerous: concert strobe"
+    },
+    {
+      "id": "4.27.40-PM",
+      "file": "Screen Recording 2026-10-10 at 4.27.40ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 54.433,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: sports"
+    },
+    {
+      "id": "4.30.25-PM",
+      "file": "Screen Recording 2026-10-10 at 4.30.25ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 60.366,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: game effects"
+    },
+    {
+      "id": "4.32.23-PM",
+      "file": "Screen Recording 2026-10-10 at 4.32.23ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 45.466,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: game"
+    },
+    {
+      "id": "4.34.51-AM",
+      "file": "Screen Recording 2026-10-10 at 4.34.51ΓÇ»AM.mp4",
+      "fps": 30,
+      "seconds": 68.366,
+      "irisFailSeconds": 68.033,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [
+        [
+          0.333,
+          68.366
+        ]
+      ],
+      "category": "dangerous: strobing visuals"
+    },
+    {
+      "id": "4.35.58-PM",
+      "file": "Screen Recording 2026-10-10 at 4.35.58ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 49.533,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: talking head"
+    },
+    {
+      "id": "4.37.50-PM",
+      "file": "Screen Recording 2026-10-10 at 4.37.50ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 47.399,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: sports, fast cuts"
+    },
+    {
+      "id": "4.40.05-PM",
+      "file": "Screen Recording 2026-10-10 at 4.40.05ΓÇ»PM.mp4",
+      "fps": 30,
+      "seconds": 43.133,
+      "irisFailSeconds": 0.533,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: fast cuts (game)",
+      "irisLabelsOverridden": [
+        [
+          11.2,
+          11.3
+        ],
+        [
+          21.767,
+          22.233
+        ],
+        [
+          35.8,
+          36.133
+        ]
+      ]
+    },
+    {
+      "id": "salvia-simulation",
+      "file": "salvia simulation.mp4",
+      "fps": 30,
+      "seconds": 45.366,
+      "irisFailSeconds": 0,
+      "irisRedFailSeconds": 0,
+      "irisExtendedOnlySeconds": 0,
+      "irisPatternSeconds": 0,
+      "labels": [],
+      "category": "safe: slow visual effects"
+    }
+  ],
+  "categoriesConfirmedBy": "team (STEP 1), 2026-10-10",
+  "notes": [
+    "4.40.05-PM: IRIS flagged 3 blips (0.5 s); confirmed as safe fast cuts, label [] (kept under irisLabelsOverridden).",
+    "175331-(1): not in the shared Drive zip; was 1312x732 and was converted to 360p/30 fps with the task ffmpeg command."
+  ]
+}

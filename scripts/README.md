@@ -129,3 +129,18 @@ Synthetic clips (640×360, 30 fps, 10 s; made by `--make-synthetic`):
 | `slow-fade` | black → white → black over 10 s | `[]` |
 
 Measured on them: recall 100%, 0 false damping, 0 undamped frames on the red burst and 3 on the white burst.
+
+## Labelling and tuning (`iris-to-labels.mjs`, `tune-sweep.mjs`, `iris-agreement.mjs`)
+
+```bash
+node scripts/iris-compare.mjs --dir=clips-small --iris=full   # IRIS grades every clip (full settings suit 360p clips)
+node scripts/iris-to-labels.mjs --dir=clips-small               # <clip>.labels.json from IRIS flash failures + results/iris-labels.json
+node scripts/tune-sweep.mjs --ratio=4.23.11-AM,4.19.02-AM       # tuning-set sweep of risk.ts constants (+ per-clip trade-off)
+node scripts/iris-agreement.mjs results/baseline-iris.md         # verdict and frame-level agreement with IRIS
+```
+
+- `iris-to-labels`: labels = frames IRIS grades as flash failure (luminance or red, grade 3), gaps < 0.5 s merged
+  (`--gap`); `--include-extended` also labels extended failure. Extended-failure and pattern seconds are counted either way.
+- `tune-sweep`: runs each combination on a temporary copy of `src/detector` (the repo's `risk.ts` is not edited) over the
+  tuning clips in `results/split.json`, and checks recall 100% and false damping ≤ baseline + 0.5 s per safe minute.
+- Results of the 2026-10-10 run are in `results/RESULTS.md`.

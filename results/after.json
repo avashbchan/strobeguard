@@ -1,0 +1,414 @@
+{
+  "fps": 30,
+  "lookAhead": 14,
+  "clips": [
+    {
+      "id": "175331-(1)",
+      "seconds": 31,
+      "labels": [
+        [
+          0.6,
+          31.233
+        ]
+      ],
+      "dangerSeconds": 30,
+      "hitSeconds": 30,
+      "safeSeconds": 0,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 0,
+      "strictFalseSeconds": 0,
+      "events": [
+        {
+          "start": 0.6,
+          "end": 31.233,
+          "undamped": 0,
+          "missed": false
+        }
+      ]
+    },
+    {
+      "id": "4.18.03-PM",
+      "seconds": 31,
+      "labels": [
+        [
+          10.666,
+          11.933
+        ]
+      ],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 26,
+      "falseSeconds": 9,
+      "strictSafeSeconds": 29,
+      "strictFalseSeconds": 10,
+      "events": [
+        {
+          "start": 10.666,
+          "end": 11.933,
+          "undamped": 0,
+          "missed": false
+        }
+      ]
+    },
+    {
+      "id": "4.19.02-AM",
+      "seconds": 55,
+      "labels": [
+        [
+          4.133,
+          4.333
+        ],
+        [
+          21.433,
+          22.7
+        ],
+        [
+          23.833,
+          24.733
+        ],
+        [
+          30.866,
+          31.4
+        ],
+        [
+          36.566,
+          37.233
+        ],
+        [
+          39.6,
+          40.033
+        ],
+        [
+          47.233,
+          52.933
+        ],
+        [
+          53.699,
+          55.899
+        ]
+      ],
+      "dangerSeconds": 5,
+      "hitSeconds": 5,
+      "safeSeconds": 22,
+      "falseSeconds": 9,
+      "strictSafeSeconds": 36,
+      "strictFalseSeconds": 19,
+      "events": [
+        {
+          "start": 4.133,
+          "end": 4.333,
+          "undamped": 6,
+          "missed": true
+        },
+        {
+          "start": 21.433,
+          "end": 22.7,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 23.833,
+          "end": 24.733,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 30.866,
+          "end": 31.4,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 36.566,
+          "end": 37.233,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 39.6,
+          "end": 40.033,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 47.233,
+          "end": 52.933,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 53.699,
+          "end": 55.899,
+          "undamped": 0,
+          "missed": false
+        }
+      ]
+    },
+    {
+      "id": "4.19.52-PM",
+      "seconds": 52,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 52,
+      "falseSeconds": 2,
+      "strictSafeSeconds": 52,
+      "strictFalseSeconds": 2,
+      "events": []
+    },
+    {
+      "id": "4.22.11-PM",
+      "seconds": 44,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 44,
+      "falseSeconds": 1,
+      "strictSafeSeconds": 44,
+      "strictFalseSeconds": 1,
+      "events": []
+    },
+    {
+      "id": "4.23.11-AM",
+      "seconds": 42,
+      "labels": [
+        [
+          3.767,
+          4.933
+        ],
+        [
+          6.533,
+          7.933
+        ],
+        [
+          9.7,
+          16.833
+        ],
+        [
+          17.733,
+          21.533
+        ],
+        [
+          27.733,
+          28.833
+        ],
+        [
+          30.9,
+          41.333
+        ]
+      ],
+      "dangerSeconds": 19,
+      "hitSeconds": 19,
+      "safeSeconds": 4,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 11,
+      "strictFalseSeconds": 4,
+      "events": [
+        {
+          "start": 3.767,
+          "end": 4.933,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 6.533,
+          "end": 7.933,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 9.7,
+          "end": 16.833,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 17.733,
+          "end": 21.533,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 27.733,
+          "end": 28.833,
+          "undamped": 0,
+          "missed": false
+        },
+        {
+          "start": 30.9,
+          "end": 41.333,
+          "undamped": 0,
+          "missed": false
+        }
+      ]
+    },
+    {
+      "id": "4.27.40-PM",
+      "seconds": 54,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 54,
+      "falseSeconds": 2,
+      "strictSafeSeconds": 54,
+      "strictFalseSeconds": 2,
+      "events": []
+    },
+    {
+      "id": "4.30.25-PM",
+      "seconds": 60,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 60,
+      "falseSeconds": 4,
+      "strictSafeSeconds": 60,
+      "strictFalseSeconds": 4,
+      "events": []
+    },
+    {
+      "id": "4.32.23-PM",
+      "seconds": 45,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 45,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 45,
+      "strictFalseSeconds": 0,
+      "events": []
+    },
+    {
+      "id": "4.34.51-AM",
+      "seconds": 68,
+      "labels": [
+        [
+          0.333,
+          68.366
+        ]
+      ],
+      "dangerSeconds": 67,
+      "hitSeconds": 67,
+      "safeSeconds": 0,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 0,
+      "strictFalseSeconds": 0,
+      "events": [
+        {
+          "start": 0.333,
+          "end": 68.366,
+          "undamped": 0,
+          "missed": false
+        }
+      ]
+    },
+    {
+      "id": "4.35.58-PM",
+      "seconds": 49,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 49,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 49,
+      "strictFalseSeconds": 0,
+      "events": []
+    },
+    {
+      "id": "4.37.50-PM",
+      "seconds": 47,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 47,
+      "falseSeconds": 0,
+      "strictSafeSeconds": 47,
+      "strictFalseSeconds": 0,
+      "events": []
+    },
+    {
+      "id": "4.40.05-PM",
+      "seconds": 43,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 43,
+      "falseSeconds": 33,
+      "strictSafeSeconds": 43,
+      "strictFalseSeconds": 33,
+      "events": []
+    },
+    {
+      "id": "salvia-simulation",
+      "seconds": 45,
+      "labels": [],
+      "dangerSeconds": 0,
+      "hitSeconds": 0,
+      "safeSeconds": 45,
+      "falseSeconds": 1,
+      "strictSafeSeconds": 45,
+      "strictFalseSeconds": 1,
+      "events": []
+    }
+  ],
+  "unlabelled": [],
+  "total": {
+    "clips": 14,
+    "seconds": 666,
+    "dangerSeconds": 121,
+    "hitSeconds": 121,
+    "recall": 1,
+    "safeSeconds": 491,
+    "falseSeconds": 61,
+    "falsePerSafeMinute": 7.454175152749491,
+    "strictSafeSeconds": 515,
+    "strictFalseSeconds": 76,
+    "strictFalsePerSafeMinute": 8.854368932038835,
+    "events": 17,
+    "missedEvents": 1,
+    "undamped": {
+      "mean": 0.35294117647058826,
+      "worst": 6
+    }
+  },
+  "sets": {
+    "tuning": {
+      "clips": 9,
+      "seconds": 413,
+      "dangerSeconds": 24,
+      "hitSeconds": 24,
+      "recall": 1,
+      "safeSeconds": 337,
+      "falseSeconds": 57,
+      "falsePerSafeMinute": 10.148367952522255,
+      "strictSafeSeconds": 361,
+      "strictFalseSeconds": 72,
+      "strictFalsePerSafeMinute": 11.966759002770083,
+      "events": 15,
+      "missedEvents": 1,
+      "undamped": {
+        "mean": 0.4,
+        "worst": 6
+      }
+    },
+    "heldout": {
+      "clips": 5,
+      "seconds": 253,
+      "dangerSeconds": 97,
+      "hitSeconds": 97,
+      "recall": 1,
+      "safeSeconds": 154,
+      "falseSeconds": 4,
+      "falsePerSafeMinute": 1.5584415584415583,
+      "strictSafeSeconds": 154,
+      "strictFalseSeconds": 4,
+      "strictFalsePerSafeMinute": 1.5584415584415583,
+      "events": 2,
+      "missedEvents": 0,
+      "undamped": {
+        "mean": 0,
+        "worst": 0
+      }
+    }
+  }
+}

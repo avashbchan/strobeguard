@@ -1,0 +1,9 @@
+PASS  static source shows on the big canvas (width 1600)
+PASS  steady    in max 0.0 (mean 0.0)  out max 0.0 (mean 0.0)  flashRisk in/out 0/0%  red in/out 0/0%
+PASS  flash5    in max 5.5 (mean 5.0)  out max 0.5 (mean 0.1)  flashRisk in/out 100/0%  red in/out 0/0%
+PASS  flash2    in max 2.5 (mean 2.1)  out max 2.5 (mean 2.0)  flashRisk in/out 60/60%  red in/out 0/0%
+PASS  single    in max 1.0 (mean 0.3)  out max 1.0 (mean 0.3)  flashRisk in/out 0/0%  red in/out 0/0%
+PASS  fade      in max 0.5 (mean 0.3)  out max 0.5 (mean 0.3)  flashRisk in/out 0/0%  red in/out 0/0%
+PASS  red5      in max 5.5 (mean 5.1)  out max 0.0 (mean 0.0)  flashRisk in/out 100/0%  red in/out 100/0%
+PASS  corner5   in max 0.0 (mean 0.0)  out max 0.0 (mean 0.0)  flashRisk in/out 0/0%  red in/out 0/0%
+8/8 checks passed.
