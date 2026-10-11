@@ -74,6 +74,12 @@ export function Viewer() {
           setAudioNotice('Audio processing could not start: ' + String(e) + '. Video continues.');
         }
       }
+      // One audio path only: if Chrome is still playing the original tab, the user hears it twice.
+      if (acquired.hasAudio && acquired.localAudioSuppressed === false) {
+        setAudioNotice(acquired.surface && acquired.surface !== 'browser'
+          ? 'You shared a window or screen, so Chrome can’t silence the original audio and you’ll hear it twice. Stop sharing and share the Chrome tab instead, with “Share tab audio” on.'
+          : 'Chrome is still playing the original tab’s sound, so you’ll hear it twice. Mute the original tab (right-click it → Mute site), or share the tab again.');
+      }
       captureRef.current = acquired;
       setCapture(acquired);
     } catch (e) {

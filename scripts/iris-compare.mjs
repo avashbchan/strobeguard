@@ -6,7 +6,8 @@
 //   node scripts/iris-compare.mjs clip.mp4 ...    # extra clips, graded by running IrisApp.exe (Windows)
 //   node scripts/iris-compare.mjs --dir=<folder>  # every video in a folder
 //
-// Options: --app=<url> (default http://localhost:5173), --only=2Hz_6s,3Hz_6s, --mode=seek|play, --fresh
+// Options: --app=<url> (default http://localhost:5173), --only=2Hz_6s,3Hz_6s, --mode=seek|play, --fresh,
+//          --iris=full|fast (IRIS settings for extra clips; default fast)
 // Output: a table per video, plus report.json and report.md in the IRIS cache directory.
 //
 // WARNING: clips are decoded in an off-screen Chrome window; some may flash. Don't watch it.
@@ -16,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, extname, join, resolve } from 'node:path';
-import { cacheDir, IRIS_VIDEOS } from './iris/paths.mjs';
+import { cacheDir, IRIS_VIDEOS, safeClipName } from './iris/paths.mjs';
 import { compareVideo, estimateFps, fmtTime, joinCsvChunks, parseIrisCsv, parseIrisFrameJson } from './iris/compare-lib.mjs';
 import { launchChrome, waitFor } from './lib/cdp.mjs';
 
@@ -24,6 +25,9 @@ const opt = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slic
 const APP = (opt('app') ?? 'http://localhost:5173').replace(/\/$/, '');
 const ONLY = opt('only')?.split(',');
 const MODE = opt('mode');
+// IRIS settings for extra clips: fast (default; 20% resize, no pattern detection) or full. Use full for
+// small clips such as the 360p set, where a 20% resize would leave IRIS only ~128×72 pixels.
+const CLIP_IRIS = opt('iris') ?? 'fast';
 const VIDEO_EXT = /\.(mp4|mov|webm|mkv|m4v)$/i;
 const clipDir = opt('dir');
 const clips = [
@@ -38,8 +42,7 @@ const appDir = join(root, 'app', 'iris-1.1.0-windows-app');
 function safeCopy(file) {
   const dir = join(root, 'clips');
   mkdirSync(dir, { recursive: true });
-  const safe = basename(file, extname(file)).normalize('NFKD').replace(/[^\w.-]+/g, '_').slice(0, 80) + extname(file).toLowerCase();
-  const dest = join(dir, safe);
+  const dest = join(dir, safeClipName(file));
   if (!existsSync(dest) || statSync(dest).size !== statSync(file).size) copyFileSync(file, dest);
   return dest;
 }
@@ -81,7 +84,8 @@ for (const name of IRIS_VIDEOS) {
 }
 for (const clip of clips) {
   const video = safeCopy(resolve(clip));
-  jobs.push({ name: basename(clip), video, irisCsv: null, iris: 'fast', source: 'IrisApp (fast)' });
+  const settings = CLIP_IRIS === 'full' ? 'full' : 'fast';
+  jobs.push({ name: basename(clip), video, irisCsv: null, iris: settings, source: `IrisApp (${settings})` });
 }
 for (const j of jobs) if (!existsSync(j.video)) throw new Error(`Missing ${j.video}. Run node scripts/iris/fetch.mjs first.`);
 

@@ -90,3 +90,57 @@ the renderer with an all-zero mask (same frame, same decode path the viewer sees
 counts as an improvement if the score goes up **and** every clip stays safe. Strobe clips can't reach
 100: suppressing a flash necessarily changes those frames. Compare them between versions, not to 100.
 Metric unit tests: `node --test src/grader/metrics.test.ts`.
+
+## `eval-video.mjs` — measure the detector on labelled clips
+
+Decodes clips with ffmpeg to 64×36 RGBA and feeds every frame to the real detector (`src/detector/detectorCore.ts`).
+No browser, no npm dependencies; needs `ffmpeg` (`winget install Gyan.FFmpeg`).
+
+```bash
+node scripts/eval-video.mjs clips-small                          # every .mp4 directly in the folder
+node scripts/eval-video.mjs --json out.json --split results/split.json clips-small
+node scripts/eval-video.mjs --make-synthetic clips-small/synthetic   # write the four synthetic clips + labels
+```
+
+Labels sit next to each clip as `<clip>.labels.json` = `[[startSec, endSec], …]`; `[]` means "never damp". Clips without a
+labels file are listed as unlabelled and left out of the totals. `--split` takes `{ "tuning": [ids], "heldout": [ids] }`
+(ids are the short names in the first column) and prints a subtotal per set.
+
+What is on screen: the renderer shows each frame 14 frames (467 ms) after the detector has seen it, so displayed frame
+*k* is filtered with the damping mask of frame min(*k* + 14, last). A displayed frame counts as **damped** when at least
+12 of the 48 cells (25%) have damping ≥ 0.8.
+
+| Metric | Definition |
+|---|---|
+| **Recall** | Labelled-dangerous *whole* seconds in which at least 50% of the displayed frames are damped |
+| **False damping** | Safe seconds in which any displayed frame is damped, per safe minute. A second is *safe* if it is further than 1 s before and 2 s after every label: the look-ahead damps just before an event and the release easing lingers just after it, on purpose. The **strict** number (any second touching no label) is printed next to it |
+| **Undamped frames per event** | Displayed frames from the start of each label to the first damped frame (mean and worst; frames ÷ 30 × 1000 = ms). An event that is never damped counts its full length and is reported as never damped |
+
+Notes: a label shorter than one whole second adds no recall seconds but still counts as an event. Downscaling uses ffmpeg's
+default filter, while the browser uses canvas smoothing, so the numbers can differ by a frame or two from a live run.
+
+Synthetic clips (640×360, 30 fps, 10 s; made by `--make-synthetic`):
+
+| Clip | Content | Label |
+|---|---|---|
+| `white-5hz-burst` | grey; black/white at 5 Hz from 3 s to 7 s | `[[3, 7]]` |
+| `red-5hz-burst` | grey; saturated red/black at 5 Hz from 3 s to 7 s | `[[3, 7]]` |
+| `single-flashes` | grey with one 2-frame white flash at 1.5 s, 4.5 s and 7.5 s | `[]` |
+| `slow-fade` | black → white → black over 10 s | `[]` |
+
+Measured on them: recall 100%, 0 false damping, 0 undamped frames on the red burst and 3 on the white burst.
+
+## Labelling and tuning (`iris-to-labels.mjs`, `tune-sweep.mjs`, `iris-agreement.mjs`)
+
+```bash
+node scripts/iris-compare.mjs --dir=clips-small --iris=full   # IRIS grades every clip (full settings suit 360p clips)
+node scripts/iris-to-labels.mjs --dir=clips-small               # <clip>.labels.json from IRIS flash failures + results/iris-labels.json
+node scripts/tune-sweep.mjs --ratio=4.23.11-AM,4.19.02-AM       # tuning-set sweep of risk.ts constants (+ per-clip trade-off)
+node scripts/iris-agreement.mjs results/baseline-iris.md         # verdict and frame-level agreement with IRIS
+```
+
+- `iris-to-labels`: labels = frames IRIS grades as flash failure (luminance or red, grade 3), gaps < 0.5 s merged
+  (`--gap`); `--include-extended` also labels extended failure. Extended-failure and pattern seconds are counted either way.
+- `tune-sweep`: runs each combination on a temporary copy of `src/detector` (the repo's `risk.ts` is not edited) over the
+  tuning clips in `results/split.json`, and checks recall 100% and false damping ≤ baseline + 0.5 s per safe minute.
+- Results of the 2026-10-10 run are in `results/RESULTS.md`.
