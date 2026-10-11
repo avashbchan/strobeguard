@@ -1,0 +1,72 @@
+
+per-clip trade-off vs base (tuning clips 4.23.11-AM, 4.19.02-AM, 4.18.03-PM): frames saved = fewer undamped frames summed over the clip's events;
+extra false = more false-damping seconds (settle margin). ratio = frames saved per extra false second.
+
+4.23.11-AM: 6 events, 19 labelled whole seconds, 4 safe seconds
+  combination                undamped Σ worst missed false s  saved extra false   ratio
+  base                                0     0      0       0      0           0   same
+  attack 30                           0     0      0       0      0           0   same
+  attack 15                           0     0      0       0      0           0   same
+  lum start 2.25                      0     0      0       0      0           0   same
+  lum start 2.0                       0     0      0       0      0           0   same
+  lum slope 4                         0     0      0       0      0           0   same
+  lum 2.25 / slope 4                  0     0      0       0      0           0   same
+  lum 2.0 / slope 4                   0     0      0       0      0           0   same
+  red start 1.0                       0     0      0       0      0           0   same
+  red slope 4                         0     0      0       0      0           0   same
+  attack 30 + lum 2.25                0     0      0       0      0           0   same
+  attack 30 + slope 4                 0     0      0       0      0           0   same
+  attack 30 + 2.25 / 4                0     0      0       0      0           0   same
+  release 400                         0     0      0       0      0           0   same
+  release 900                         0     0      0       0      0           0   same
+  lum start 2.75 + att 30             0     0      0       0      0           0   same
+  lum start 3.0 + att 30              0     0      0       0      0           0   same
+  lum start 2.4                       0     0      0       0      0           0   same
+  lum start 2.3                       0     0      0       0      0           0   same
+  lum 2.25 / slope 1.5                0     0      0       0      0           0   same
+
+4.19.02-AM: 8 events, 5 labelled whole seconds, 22 safe seconds
+  combination                undamped Σ worst missed false s  saved extra false   ratio
+  base                                6     6      1       9      0           0   same
+  attack 30                           6     6      1       9      0           0   same
+  attack 15                           6     6      1       9      0           0   same
+  lum start 2.25                      0     0      0       9      6           0   better on both
+  lum start 2.0                       0     0      0      13      6           4   1.50 frames per false s
+  lum slope 4                         6     6      1       9      0           0   same
+  lum 2.25 / slope 4                  0     0      0      13      6           4   1.50 frames per false s
+  lum 2.0 / slope 4                   0     0      0      13      6           4   1.50 frames per false s
+  red start 1.0                       6     6      1       9      0           0   same
+  red slope 4                         6     6      1       9      0           0   same
+  attack 30 + lum 2.25                0     0      0      11      6           2   3.00 frames per false s
+  attack 30 + slope 4                 6     6      1       9      0           0   same
+  attack 30 + 2.25 / 4                0     0      0      13      6           4   1.50 frames per false s
+  release 400                         6     6      1       8      0          -1   better on both
+  release 900                         6     6      1       9      0           0   same
+  lum start 2.75 + att 30             6     6      1       7      0          -2   better on both
+  lum start 3.0 + att 30             22    16      2       6    -16          -3   0.19 false s saved per frame lost
+  lum start 2.4                       6     6      1       9      0           0   same
+  lum start 2.3                       6     6      1       9      0           0   same
+  lum 2.25 / slope 1.5                6     6      1       9      0           0   same
+
+4.18.03-PM: 1 events, 0 labelled whole seconds, 26 safe seconds
+  combination                undamped Σ worst missed false s  saved extra false   ratio
+  base                                0     0      0       9      0           0   same
+  attack 30                           0     0      0      10      0           1   worse on both
+  attack 15                           0     0      0      10      0           1   worse on both
+  lum start 2.25                      0     0      0      10      0           1   worse on both
+  lum start 2.0                       0     0      0      12      0           3   worse on both
+  lum slope 4                         0     0      0       9      0           0   same
+  lum 2.25 / slope 4                  0     0      0      12      0           3   worse on both
+  lum 2.0 / slope 4                   0     0      0      12      0           3   worse on both
+  red start 1.0                       0     0      0       9      0           0   same
+  red slope 4                         0     0      0       9      0           0   same
+  attack 30 + lum 2.25                0     0      0      10      0           1   worse on both
+  attack 30 + slope 4                 0     0      0      10      0           1   worse on both
+  attack 30 + 2.25 / 4                0     0      0      12      0           3   worse on both
+  release 400                         0     0      0       9      0           0   same
+  release 900                         0     0      0      11      0           2   worse on both
+  lum start 2.75 + att 30             0     0      0       9      0           0   same
+  lum start 3.0 + att 30              0     0      0       9      0           0   same
+  lum start 2.4                       0     0      0       9      0           0   same
+  lum start 2.3                       0     0      0      10      0           1   worse on both
+  lum 2.25 / slope 1.5                0     0      0      10      0           1   worse on both

@@ -1,0 +1,22 @@
+{
+  "method": "by clip; within each category (dangerous / safe) sorted by sha1(\"strobeguard-split:\" + id), first ceil(n/3) held out. Frozen: do not change.",
+  "created": "2026-10-10",
+  "tuning": [
+    "4.19.02-AM",
+    "4.23.11-AM",
+    "4.18.03-PM",
+    "4.19.52-PM",
+    "salvia-simulation",
+    "4.37.50-PM",
+    "4.40.05-PM",
+    "4.27.40-PM",
+    "4.22.11-PM"
+  ],
+  "heldout": [
+    "175331-(1)",
+    "4.34.51-AM",
+    "4.32.23-PM",
+    "4.35.58-PM",
+    "4.30.25-PM"
+  ]
+}
