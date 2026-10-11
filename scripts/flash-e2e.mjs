@@ -175,7 +175,7 @@ try {
 
   // App: accept the warning, then share the flash page.
   await waitFor(() => app.ev(`!!document.querySelector('button')`));
-  await app.ev(`[...document.querySelectorAll('button')].find((b) => /understand|continue/i.test(b.textContent))?.click()`);
+  await app.ev(`[...document.querySelectorAll('button')].find((b) => /start watching|understand|continue/i.test(b.textContent))?.click()`);
   const SHARE_BUTTON = `[...document.querySelectorAll('button')].find((b) => /share a tab/i.test(b.textContent))`;
   // The warning fades out for ~320 ms before the viewer (and its "Share a tab" button) mounts; wait for
   // it instead of a fixed pause, which flaked on a busy machine.
