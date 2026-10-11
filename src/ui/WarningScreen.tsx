@@ -27,8 +27,8 @@ export function WarningScreen({ onAccept }: Props) {
         <h1 id="warning-title">Flash protection is on</h1>
         <p>
           StrobeGuard spots rapid flashing and filters it to reduce flash risk before it reaches
-          your screen. In our tests, the filtered stream stayed under the WCAG limit of three
-          flashes per second.
+          your screen. In tests on real stream footage, it damped every second of flashing that
+          EA’s IRIS photosensitivity analysis flagged.
         </p>
         <p>
           Triggers vary from person to person. If you have photosensitive epilepsy, keep your usual
